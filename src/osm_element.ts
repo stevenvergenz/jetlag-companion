@@ -1,4 +1,4 @@
-import { OsmElement, OsmNode, OsmRelation, OsmWay, get } from "./overpass_api";
+import { OsmElement, OsmNode, OsmRelation, OsmWay, OsmWayGroup, get } from "./overpass_api";
 import { Id, pack, unpack, reverse, unreversed } from './id';
 
 export abstract class Element {
@@ -9,20 +9,18 @@ export abstract class Element {
     public abstract get data(): OsmElement;
 
     public parentIds = new Set<Id>();
-    protected getParents() {
+    public get parents(): Element[] {
         return [...this.parentIds]
             .map(id => get(id))
             .filter(e => e !== undefined);
     }
-    public abstract get parents(): Element[];
 
     public childIds = [] as Id[];
-    protected getChildren() {
+    public get children(): Element[] {
         return this.childIds
             .map(id => get(id))
             .filter(e => e !== undefined);
     }
-    public abstract get children(): Element[];
 
     public get name(): string {
         return this._data?.tags?.['name'] 
@@ -51,17 +49,7 @@ export abstract class Element {
     }
 }
 
-abstract class GenericElement<P extends Element, C extends Element> extends Element {
-    public get parents(): P[] {
-        return this.getParents() as P[];
-    }
-
-    public get children(): C[] {
-        return this.getChildren() as C[];
-    }
-}
-
-export class Relation extends GenericElement<Element, WayGroup> {
+export class Relation extends Element {
     public readonly wayGroups = new Map<Id, WayGroup>();
 
     public constructor(id: Id, data: OsmRelation) {
@@ -76,15 +64,9 @@ export class Relation extends GenericElement<Element, WayGroup> {
     public get data() {
         return this._data as OsmRelation;
     }
-
-    public get children(): WayGroup[] {
-        return this.childIds
-            .map(id => this.wayGroups.get(id))
-            .filter(wg => wg !== undefined);
-    }
 }
 
-export class WayGroup extends GenericElement<Relation, Way> {
+export class WayGroup extends Element {
     private static nextOffsets: { [id: Id]: number } = {};
     private static interests = new Map<Id, Set<Id>>();
     private static knownIds = new Set<Id>();
@@ -129,7 +111,8 @@ export class WayGroup extends GenericElement<Relation, Way> {
 
         for (const role of roles) {
             /** The list of known way groups that successfully added the fulfilled way */
-            const added = relation.children.filter(wg => wg.role === role && wg.add(way));
+            const added = [...relation.wayGroups.values()]
+                .filter(e => e.role === role && e.add(way));
 
             // no existing way group will take it, add a new one
             if (added.length === 0) {
@@ -202,19 +185,24 @@ export class WayGroup extends GenericElement<Relation, Way> {
     public startsWithNode: Id;
     public endsWithNode: Id;
 
-    public get data(): never {
-        throw new Error("WayGroups don't have data");
-    }
-
     public get name(): string {
         return `${this.children[0].name}, ${this.role}`;
+    }
+
+    public get data(): OsmWayGroup {
+        return this._data as OsmWayGroup;
     }
 
     public constructor(relationId: Id, role: string, ...ways: Way[]) {
         const offset = WayGroup.nextOffsets[relationId] ?? 0;
         WayGroup.nextOffsets[relationId] = offset + 1;
         const rid = unpack(relationId);
-        super(pack({ type: 'wayGroup', id: rid.id, offset }), undefined);
+        const wgId = pack({ type: 'wayGroup', id: rid.id, offset });
+        super(wgId, {
+            type: 'wayGroup',
+            id: rid.id,
+            index: offset,
+        });
 
         this.parentIds.add(relationId);
         this.role = role;
@@ -261,15 +249,11 @@ export class WayGroup extends GenericElement<Relation, Way> {
             return false;
         }
         
-        //if (way.id === 'w:909645217') {
-        //    console.log(`Added way ${way.id} to way group ${this.id}:`, way.parentIds);
-        //}
-        
         return true;
     }
 }
 
-export class Way extends GenericElement<WayGroup, Node> {
+export class Way extends Element {
     public constructor(id: Id, data: OsmWay) {
         super(id, data);
 
@@ -294,9 +278,15 @@ export class Way extends GenericElement<WayGroup, Node> {
     }
 
     public get data() { return this._data as OsmWay; }
+
+    public get children(): Node[] {
+        return this.childIds
+            .map(id => get(id))
+            .filter(e => e !== undefined) as Node[];
+    }
 }
 
-export class Node extends GenericElement<Way, Element> {
+export class Node extends Element {
     public static parentIds = new Map<Id, Set<Id>>();
 
     public constructor(id: Id, data: OsmNode) {
@@ -311,4 +301,24 @@ export class Node extends GenericElement<Way, Element> {
 
     public get lat() { return this.data.lat; }
     public get lon() { return this.data.lon; }
+
+    public get isStation(): boolean {
+        return this.data.tags?.public_transport === 'station';
+    }
+    public get isRail(): boolean {
+        return this.data.tags?.railway !== undefined;
+    }
+    public get isBusStop(): boolean {
+        return this.data.tags?.highway === 'bus_stop';
+    }
+    public get busRoutes(): Relation[] {
+        const ids = this.parents
+            .filter(e => e instanceof Relation && e.data.tags?.type === 'route')
+            .flatMap(e => [...e.parentIds])
+            .reduce((acc, id) => {
+                acc.add(id);
+                return acc;
+            }, new Set<Id>());
+        return [...ids].map(id => get(id) as Relation);
+    }
 }

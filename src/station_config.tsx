@@ -12,15 +12,6 @@ const StationStyle: PathOptions = {
     weight: 2,
     fillOpacity: 0.8,
 };
-const RailStyle: PathOptions = {
-    ...StationStyle,
-    fillColor: 'red',
-};
-
-const BusStyle: PathOptions = {
-    ...StationStyle,
-    fillColor: 'purple',
-};
 
 export function StationConfig(): ReactNode {
     const {
@@ -50,29 +41,29 @@ export function StationMarkers(): ReactNode {
         boundary: { editing, path },
         stations: { show, useTransitStations },
     } = useContext(Context);
-    const [ rail, setRail ] = useState([] as Node[]);
-    const [ bus, setBus ] = useState([] as Node[]);
+    const [ stations, setStations ] = useState([] as Node[]);
 
     useEffect(() => {
         async function helper() {
             if (!path || path.length < 2) { return; }
-            const res = await requestStations(path, useTransitStations);
-            setRail(res.filter(n => n.data.tags?.railway === 'station'));
-            setBus(res.filter(n => n.data.tags?.highway === 'bus_stop'));
+            const res = await requestStations(path, useTransitStations, 1);
+            setStations(res);
         }
         helper();
     }, [path, useTransitStations]);
 
     if (path && !editing && show) {
         return <LayerGroup>
-            {rail.map(n =>
-                <CircleMarker key={n.id} center={[n.lat, n.lon]} radius={5} pathOptions={RailStyle}>
-                    <Tooltip>Rail: {n.name}</Tooltip>
-                </CircleMarker>
-            )}
-            {bus.map(n =>
-                <CircleMarker key={n.id} center={[n.lat, n.lon]} radius={5} pathOptions={BusStyle}>
-                    <Tooltip>Bus: {n.name}</Tooltip>
+            {stations.map(n =>
+                <CircleMarker key={n.id} center={[n.lat, n.lon]} radius={5} pathOptions={StationStyle}>
+                    <Tooltip>
+                        <p className='font-bold'>{n.name}</p>
+                        <span>{[
+                            n.isStation ? 'Station' : '',
+                            n.isRail ? 'Rail' : '',
+                        ].join(', ')}
+                        </span>
+                    </Tooltip>
                 </CircleMarker>
             )}
         </LayerGroup>;

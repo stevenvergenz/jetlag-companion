@@ -34,6 +34,11 @@ type OsmMember = {
     role: string,
 };
 
+export type OsmWayGroup = OsmCommon & {
+    type: 'wayGroup',
+    index: number,
+}
+
 export type OsmWay = OsmCommon & {
     type: 'way',
     nodes: number[],
@@ -45,7 +50,7 @@ export type OsmNode = OsmCommon & {
     lon: number,
 };
 
-export type OsmElement = OsmRelation | OsmWay | OsmNode;
+export type OsmElement = OsmRelation | OsmWayGroup | OsmWay | OsmNode;
 
 const QueryLimit = 10 * 1024 * 1024; // 2MB
 
@@ -142,13 +147,39 @@ export function get(id: Id): Element | undefined {
     }
 }
 
-export function requestStations(poly: LatLngTuple[], useTransitStations: boolean): Promise<Node[]> {
+export async function requestStations(
+    poly: LatLngTuple[], 
+    useTransitStations: boolean, 
+    busStopThreshold: number,
+): Promise<Node[]> {
     const polyStr = poly.flat().join(' ');
-    const q = `
-        node(poly:"${polyStr}")->.a;
+    const stationQuery = `
+        node.all[public_transport=station] -> .stations;
         (
-            ${useTransitStations ? 'node.a[public_transport=station][railway=station];' : ''}
-        );
+            .result;
+            .stations;
+        ) -> .result;
     `;
-    return query(q).then(ids => ids.map(id => get(id) as Node));
+    const busQuery = `
+        node.all[highway='bus_stop'] -> .stops;
+        relation.stops(bn)[type='route'][route='bus'] -> .variants;
+        relation.variants(br)[type='route_master'][route_master='bus'] -> .routes;
+        (
+            .result;
+            .stops;
+            .variants;
+            .routes;
+        ) -> .result;`
+    const q = `
+        node(poly:"${polyStr}") -> .all;
+        ${useTransitStations ? stationQuery : ''}
+        ${busStopThreshold > 0 ? busQuery : ''}
+        .result;
+    `;
+    const ids = await query(q);
+    const nodes = ids
+        .map(id => get(id) as Node)
+        .filter(e => e.data.type === 'node')
+        .filter(n => !n.isBusStop || n.busRoutes.length >= busStopThreshold);
+    return nodes;
 }
