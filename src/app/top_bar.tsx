@@ -1,12 +1,7 @@
-import { Dispatch, JSX, SetStateAction } from 'react';
+import { JSX } from 'react';
 
-type Props = {
-    toggleSearchVisible: () => void,
-}
-
-export default function TopBar({ toggleSearchVisible }: Props): JSX.Element {
-    return <header className='m-2 flex gap-4'>
+export default function TopBar(): JSX.Element {
+    return <header className='p-2 flex gap-4 border-b'>
         <span>Jet Lag Companion</span>
-        <button onClick={toggleSearchVisible}>&#x1F50D;</button>
     </header>;
 }
