@@ -7,6 +7,8 @@ type Content = {
     setIncluded: (n: number[]) => void,
     excluded: number[],
     setExcluded: (n: number[]) => void,
+
+    save: () => void,
 };
 
 const dummyContent: Content = {
@@ -16,17 +18,26 @@ const dummyContent: Content = {
     setIncluded: () => {},
     excluded: [],
     setExcluded: () => {},
+
+    save: () => {},
 };
 
 export const Context = createContext(dummyContent as Content);
 
 export function ContextProvider({ children }: { children: ReactNode }) {
     const [hovering, setHovering] = useState(0);
-    const [included, setIncluded] = useState([380107, 149149, 380109] as number[]);
-    const [excluded, setExcluded] = useState([] as number[]);
+    const [included, setIncluded] = useState(
+        JSON.parse(window.localStorage.getItem('boundary_included') ?? '[]') as number[]);
+    const [excluded, setExcluded] = useState(
+        JSON.parse(window.localStorage.getItem('boundary_excluded') ?? '[]') as number[]);
+
+    function save() {
+        localStorage.setItem('boundary_included', JSON.stringify(included));
+        localStorage.setItem('boundary_excluded', JSON.stringify(excluded));
+    }
 
     return <Context.Provider value={
-        { hovering, setHovering, included, setIncluded, excluded, setExcluded }}>
+        { hovering, setHovering, included, setIncluded, excluded, setExcluded, save }}>
         {children}
     </Context.Provider>;
 }

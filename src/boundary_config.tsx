@@ -10,6 +10,16 @@ export function BoundaryConfig(): ReactNode {
 
     return <TreeNode id='boundaries' initiallyOpen={true}>
         <span className='font-bold'>Boundaries</span>
+        <TreeNode id='boundary-settings' initiallyOpen={true}>
+            <span className='font-bold'>Settings</span>
+            <div>
+                <input type='number' min='0' placeholder='OSM Relation ID' />
+                <button type='button'>Add</button>
+            </div>
+            <div>
+                <button type='button'>Save</button>
+            </div>
+        </TreeNode>
         { included.map(id => <RelationConfig key={`rc${id}`} id={id} />) }
     </TreeNode>;
 }

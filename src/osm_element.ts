@@ -1,14 +1,11 @@
-import EventEmitter from "events";
+import { OsmElement, OsmNode, OsmRelation, OsmWay, get } from "./overpass_api";
 
-import { OsmElement, OsmNode, OsmRelation, OsmWay, getAsync, get } from "./overpass_api";
-
-export class Element extends EventEmitter {
+export class Element {
     static parentIds = new Map<number, number[]>();
 
     protected _data: OsmElement;
 
     public constructor(data: OsmElement) {
-        super();
         this._data = data;
     }
 
@@ -67,13 +64,14 @@ export class Way extends Element {
         Way.firstNodes.set(this.nodes[0].id, this);
         Way.lastNodes.set(this.nodes[this.nodes.length - 1].id, this);
 
-        let other: Way | undefined;
-        if (other = Way.lastNodes.get(this.nodes[0].id)) {
+        let other = Way.lastNodes.get(this.nodes[0].id);
+        if (other) {
             other.next = this;
             this.previous = other;
         }
 
-        if (other = Way.firstNodes.get(this.nodes[this.nodes.length - 1].id)) {
+        other = Way.firstNodes.get(this.nodes[this.nodes.length - 1].id);
+        if (other) {
             other.previous = this;
             this.next = other;
         }
@@ -87,7 +85,7 @@ export class Way extends Element {
     }
 
     public get first(): Way {
-        let f: Way = this;
+        let f = this as Way;
         while (f.previous) {
             f = f.previous;
         }
@@ -96,7 +94,7 @@ export class Way extends Element {
 
     public get following(): Way[] {
         let f: Way | undefined = this.next;
-        let following = [];
+        const following = [];
         while (f) {
             following.push(f);
             f = f.next;

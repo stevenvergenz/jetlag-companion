@@ -4,7 +4,7 @@ import { get, getAsync } from './overpass_api';
 import { Relation, Way } from './osm_element';
 import { Context } from './context';
 import { LatLngTuple, LatLngBounds, PathOptions,
-    FeatureGroup as FeatureGroupType, Polyline as PolylineType } from 'leaflet';
+    FeatureGroup as FeatureGroupType } from 'leaflet';
 import { FeatureGroup, Polyline, useMap } from 'react-leaflet';
 
 const EnabledStyle: PathOptions = {
@@ -28,35 +28,38 @@ export function BoundaryLayer(): ReactNode {
     const map = useMap();
     const layerRef = useRef(null as FeatureGroupType | null);
 
-    useEffect(() => { recalcBounds(); }, [included, excluded, map, layerRef.current]);
-
-    async function recalcBounds() {
-        if (!map || !layerRef.current) { return; }
-        
-        console.log('Updating bounds');
-
-        const bounds = new LatLngBounds(
-            // loaded enabled relations
-            (await Promise.all(
-                included
-                    .filter(id => !excluded.includes(id))
-                    .map(id => getAsync<Relation>(id))
-            ))
-            // enabled ways
-            .map(r => r.ways)
-            .flat()
-            .filter(w => !excluded.includes(w.id) && !excluded.includes(-w.first.id))
-            // nodes
-            .map(w => w.nodes)
-            .flat()
-            // convert to LatLngTuple
-            .map(n => [n.lat, n.lon] as LatLngTuple)
-        );
-
-        if (bounds.isValid()) {
-            map.fitBounds(bounds);
+    useEffect(() => {
+        async function recalcBounds() {
+            if (!map || !layerRef.current) { return; }
+            
+            console.log('Updating bounds');
+    
+            const bounds = new LatLngBounds(
+                // loaded enabled relations
+                (await Promise.all(
+                    included
+                        .filter(id => !excluded.includes(id))
+                        .map(id => getAsync<Relation>(id))
+                ))
+                // enabled ways
+                .map(r => r.ways)
+                .flat()
+                .filter(w => !excluded.includes(w.id) && !excluded.includes(-w.first.id))
+                // nodes
+                .map(w => w.nodes)
+                .flat()
+                // convert to LatLngTuple
+                .map(n => [n.lat, n.lon] as LatLngTuple)
+            );
+    
+            if (bounds.isValid()) {
+                map.fitBounds(bounds);
+            }
         }
-    }
+        recalcBounds();
+    }, [included, excluded, map, layerRef]);
+
+    
 
     return <FeatureGroup ref={layerRef} interactive={false}>
         {included.map(id => <RelationPath key={`rp${id}`} id={id} />)}
@@ -74,7 +77,7 @@ export function RelationPath({ id }: RelationPathProps): ReactNode {
         if (!relation || relation.id !== id) {
             getAsync<Relation>(id).then((r) => setRelation(r));
         }
-    }, [id]);
+    }, [id, relation]);
 
     return <>
         { relation
@@ -96,7 +99,7 @@ export function WayPath({ id }: WayPathProps): ReactNode {
         if (!way || way.id !== id) {
             setWay(get<Way>(id));
         }
-    }, [id]);
+    }, [id, way]);
 
     function computeStyle() {
         if (!way) {

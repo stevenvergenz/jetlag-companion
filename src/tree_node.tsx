@@ -17,12 +17,16 @@ export function TreeNode({ id, children, initiallyOpen, onMouseEnter, onMouseLea
 
     function mouseEnter(e: MouseEvent<Element>) {
         setHover(true);
-        onMouseEnter && onMouseEnter(e);
+        if (onMouseEnter) {
+            onMouseEnter(e);
+        }
     }
 
     function mouseLeave(e: MouseEvent<Element>) {
         setHover(false);
-        onMouseLeave && onMouseLeave(e);
+        if (onMouseLeave) {
+            onMouseLeave(e);
+        }
     }
 
     return <div className={hover ? 'bg-sky-100' : ''}>
