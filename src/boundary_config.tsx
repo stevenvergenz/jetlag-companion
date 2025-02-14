@@ -12,7 +12,7 @@ export function BoundaryConfig(): ReactNode {
         included, setIncluded,
         save,
     } = useContext(Context);
-    const [newId, setNewId] = useState(undefined as number | undefined);
+    const [newId, setNewId] = useState(0);
 
     function addRelation() {
         if (!newId) {
@@ -22,7 +22,7 @@ export function BoundaryConfig(): ReactNode {
         const id = pack({ type: 'relation', id: newId });
         if (!included.includes(id)) {
             setIncluded([...included, id]);
-            setNewId(undefined);
+            setNewId(0);
         }
     }
 

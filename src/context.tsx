@@ -22,6 +22,11 @@ type Content = {
     errorWays: Id[],
     setErrorWays: (ids: Id[]) => void,
 
+    showStations: boolean,
+    setShowStations: (s: boolean) => void,
+    useTransitStations: boolean,
+    setUseTransitStations: (s: boolean) => void,
+
     save: () => void,
 };
 
@@ -43,6 +48,11 @@ const dummyContent: Content = {
     errorWays: [],
     setErrorWays: () => {},
 
+    showStations: true,
+    setShowStations: () => {},
+    useTransitStations: true,
+    setUseTransitStations: () => {},
+
     save: () => {},
 };
 
@@ -62,6 +72,8 @@ export function ContextProvider({ children }: { children: ReactNode }) {
     const [boundary, setBoundary] = useState([] as LatLngTuple[]);
     const [hovering, setHovering] = useState('');
     const [errorWays, setErrorWays] = useState([] as Id[]);
+    const [showStations, setShowStations] = useState(true);
+    const [useTransitStations, setUseTransitStations] = useState(true);
 
     useEffect(() => {
         async function helper() {
@@ -113,6 +125,8 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         boundary, setBoundary,
         hovering, setHovering,
         errorWays, setErrorWays,
+        showStations, setShowStations,
+        useTransitStations, setUseTransitStations,
         save, };
     return <Context.Provider value={values}>
         {children}

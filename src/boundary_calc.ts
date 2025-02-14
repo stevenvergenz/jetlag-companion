@@ -226,7 +226,6 @@ export function calcRelationPath(relation: Relation, excluded: Id[], distanceFn:
 
     // for each end of each way group
     const termini = [...legs.values()].map(l => Object.values(l.termini)).flat();
-    console.log(termini);
     for (const ref of termini) {
         if (ref.continuedBy) { continue; }
         

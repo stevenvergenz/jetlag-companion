@@ -144,10 +144,13 @@ export function get(id: Id): Element | undefined {
     }
 }
 
-export async function getStations(poly: LatLngTuple[]): Promise<Node[]> {
+export async function getStations(poly: LatLngTuple[], useTransitStations: boolean): Promise<Node[]> {
     const polyStr = poly.flat().join(' ');
-    const q = `(
-        node[public_transit=platform](poly:"${polyStr}");
-    );`;
+    const q = `
+        node(poly:"${polyStr}")->.a;
+        (
+            ${useTransitStations ? 'node.a[public_transport=station][railway=station];' : ''}
+        );
+    `;
     return await query(q) as Node[];
 }
