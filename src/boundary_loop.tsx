@@ -7,7 +7,7 @@ import { Relation, Way } from './osm_element';
 import { Context } from './context';
 import { RTree } from './quadtree';
 
-const Vec2 = {
+export const Vec2 = {
     add: (a: LatLngTuple, b: LatLngTuple): LatLngTuple => [a[0] + b[0], a[1] + b[1]],
     sub: (a: LatLngTuple, b: LatLngTuple): LatLngTuple => [a[0] - b[0], a[1] - b[1]],
     scale: (a: LatLngTuple, b: number): LatLngTuple => [a[0] * b, a[1] * b],
@@ -31,31 +31,152 @@ type EndpointMatch = {
     score: number,
 };
 
-type Leg = {
+type WayLeg = {
     id: number,
     termini: { start: Terminus, end: Terminus},
     path: LatLngTuple[],
 };
 
+type RelationLeg = {
+    id: number,
+    searchTree: RTree,
+    path: LatLngTuple[],
+    intersections: Map<number, [number, number]>,
+}
+
 /** Maximum distance in meters between adjacent ways to be merged */
-const MaxDistance = 500;
+const MaxDistanceMeters = 500;
+const MaxDistanceDeg = MaxDistanceMeters / 111320;
 
 const MaxDot = -0.5;
 
-async function generateBoundaryLoopPath(included: number[], excluded: number[], map: LMap): Promise<LatLngTuple[]> {
+async function generateBoundaryLoopPath(
+    included: number[], excluded: number[], map: LMap
+): Promise<LatLngTuple[] | undefined> {
     const ids = included.filter(id => !excluded.includes(id));
     const rs = await Promise.all(ids.map(id => getAsync<Relation>(id)));
     return mergeRelations(rs);
 
-    function mergeRelations(relations: Relation[]): LatLngTuple[] {
-        map
-        const legs = relations.map(r => {
-            return {
-                id: r.id,
-                path: calcRelationPath(r),
-                searchTree: new RTree(calcRelationPath(r), (a, b) => map.distance(a, b)),
-            };
-        });
+    function mergeRelations(relations: Relation[]): LatLngTuple[] | undefined {
+        const distanceFn = map.distance.bind(map);
+        const legs = relations
+            .map(r => {
+                const path = calcRelationPath(r);
+                return {
+                    id: r.id,
+                    searchTree: new RTree(path),
+                    intersections: new Map(),
+                    path,
+                } as RelationLeg;
+            })
+            .reduce((map, leg) => {
+                map.set(leg.id, leg);
+                return map;
+            }, new Map<number, RelationLeg>());
+
+
+        for (const leg of legs.values()) {
+            for (const other of [...legs.values()].filter(l => l.id !== leg.id)) {
+                let minIndex = -1;
+                let minDist = Infinity;
+                for (let i = 0; i < leg.path.length; i++) {
+                    const dist = other.searchTree.distance(leg.path[i], distanceFn);
+                    if (dist < minDist) {
+                        minIndex = i;
+                        minDist = dist;
+                    }
+                }
+
+                if (minDist > MaxDistanceMeters) {
+                    continue;
+                }
+                
+                const nextIndex = minIndex + 1;
+                const prevIndex = minIndex - 1;
+                const nextDist = leg.path[nextIndex]
+                    ? other.searchTree.distance(leg.path[nextIndex], distanceFn)
+                    : Infinity;
+                const prevDist = leg.path[prevIndex] 
+                    ? other.searchTree.distance(leg.path[prevIndex], distanceFn) 
+                    : Infinity;
+                const nextClosest = nextDist < prevDist ? nextIndex : prevIndex;
+
+                leg.intersections.set(other.id, [minIndex, nextClosest]);
+            }
+        }
+
+        const mergedPath = [] as LatLngTuple[];
+        const addedIds = new Set<number>();
+
+        /** The ID of the path being added to the merged path */
+        let id = legs.keys().next().value!;
+        /** The ID of the previous path to be added, which intersects with id */
+        let from = legs.get(id)!.intersections.keys().next().value!;
+
+        while (!addedIds.has(id)) {
+            const thisLeg = legs.get(id)!;
+            if (thisLeg.intersections.size !== 2 || !thisLeg.intersections.has(from)) {
+                return undefined;
+            }
+
+            // add from-intersection
+            if (!addedIds.has(from) && legs.get(from)?.intersections.has(id)) {
+                const fromLeg = legs.get(from)!;
+                const intersection = calcIntersection(fromLeg, thisLeg);
+                if (intersection) {
+                    mergedPath.push(intersection);
+                }
+            }
+
+            // add id path
+            const [nearIndex1, nearIndex2] = thisLeg.intersections.get(from)!;
+            const farLegId = [...thisLeg.intersections.keys()].find(k => k !== from)!;
+            const [farIndex1, farIndex2] = thisLeg.intersections.get(farLegId)!;
+            const ordered = [nearIndex1, nearIndex2, farIndex1, farIndex2].sort();
+            const points = nearIndex1 < farIndex1
+                ? thisLeg.path.slice(ordered[1], ordered[2] + 1)
+                : thisLeg.path.slice(ordered[1], ordered[2] + 1).reverse();
+            mergedPath.push(...points);
+
+            // add to-intersection
+            if (!addedIds.has(farLegId) && legs.get(farLegId)?.intersections.has(id)) {
+                const toLeg = legs.get(farLegId)!;
+                const intersection = calcIntersection(toLeg, thisLeg);
+                if (intersection) {
+                    mergedPath.push(intersection);
+                }
+            }
+            
+            // increment
+            addedIds.add(id);
+            from = id;
+            id = farLegId;
+        }
+
+        return mergedPath;
+    }
+
+    function calcIntersection(leg1: RelationLeg, leg2: RelationLeg): LatLngTuple | undefined {
+        const leg1points = leg1.intersections.get(leg2.id)?.map(i => leg1.path[i]);
+        const leg2points = leg2.intersections.get(leg1.id)?.map(i => leg2.path[i]);
+        if (!leg1points || !leg2points || leg1points.length !== 2 || leg2points.length !== 2) {
+            return undefined;
+        }
+
+        const [x1, y1] = leg1points[0];
+        const [x2, y2] = leg1points[1];
+        const [x3, y3] = leg2points[0];
+        const [x4, y4] = leg2points[1];
+
+        const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+        if (denom === 0) {
+            return undefined; // Lines are parallel or coincident
+        }
+
+        const intersectX = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom;
+        const intersectY = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom;
+
+        return [intersectX, intersectY];
     }
     
     function calcRelationPath(relation: Relation): LatLngTuple[] {
@@ -78,12 +199,12 @@ async function generateBoundaryLoopPath(included: number[], excluded: number[], 
                         } as Terminus,
                     },
                     path,
-                } as Leg;
+                } as WayLeg;
             })
             .reduce((map, leg) => {
                 map.set(leg.id, leg);
                 return map;
-            }, new Map<number, Leg>());
+            }, new Map<number, WayLeg>());
     
         // compare each end of each way group to every other end and match them by distance and orientation
     
@@ -107,7 +228,7 @@ async function generateBoundaryLoopPath(included: number[], excluded: number[], 
                 const dot = Vec2.dot(ref.vec, other.vec);
     
                 // closer points are linearly better than farther points up to the max distance
-                const ptScore = Math.max(0, 1 - dist / MaxDistance);
+                const ptScore = Math.max(0, 1 - dist / MaxDistanceDeg);
                 // more opposing vectors are linearly better than more perpendicular/parallel vectors
                 const vecScore = Math.max(0, (dot - MaxDot) / (-1 - MaxDot));
                 // distance is more important than orientation
@@ -118,7 +239,7 @@ async function generateBoundaryLoopPath(included: number[], excluded: number[], 
                 }
             }
     
-            if (bestMatch.end && bestMatch.dist < MaxDistance && bestMatch.dot < MaxDot) {
+            if (bestMatch.end && bestMatch.dist < MaxDistanceMeters && bestMatch.dot < MaxDot) {
                 ref.continuedBy = bestMatch.end.id;
                 bestMatch.end.continuedBy = ref.id;
             }
@@ -174,6 +295,10 @@ export function BoundaryLoop(): ReactNode {
         if (!map) { return; }
         generateBoundaryLoopPath(included, excluded, map)
             .then((p) => {
+                if (!p) {
+                    console.log('Boundary path not closed');
+                    return;
+                }
                 setPath(p);
                 map.fitBounds(p);
             });
