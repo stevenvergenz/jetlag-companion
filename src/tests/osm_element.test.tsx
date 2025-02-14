@@ -1,7 +1,8 @@
 import { expect, test } from 'vitest';
 
-import { Relation, WayGroup, Way, Node } from '../osm_element';
-import { cache, get } from '../overpass_api';
+import { Relation, Way, Node } from '../osm_element';
+import { cache } from '../overpass_api';
+import { pack } from '../id';
 
 function setup() {
     cache.clear();
@@ -14,30 +15,59 @@ function setup() {
     cache.set('w:1', new Way('w:1', { type: 'way', id: 1, nodes: [1, 2] }));
     cache.set('w:2', new Way('w:2', { type: 'way', id: 2, nodes: [2, 3] }));
     cache.set('w:3', new Way('w:3', { type: 'way', id: 3, nodes: [3, 4] }));
+    
+    cache.set('w:4', new Way('w:4', { type: 'way', id: 4, nodes: [4, 3] }));
+    cache.set('w:5', new Way('w:5', { type: 'way', id: 5, nodes: [3, 2] }));
+    cache.set('w:6', new Way('w:6', { type: 'way', id: 6, nodes: [2, 1] }));
+}
 
-    cache.set('r:1', new Relation('r:1', { type: 'relation', id: 1, members: [
-        { type: 'way', ref: 1, role: 'forward' },
-        { type: 'way', ref: 2, role: 'forward' },
-        { type: 'way', ref: 3, role: 'forward' },
-    ]}));
-    cache.set('r:2', new Relation('r:2', { type: 'relation', id: 2, members: [
-        { type: 'way', ref: 1, role: 'forward' },
-        { type: 'way', ref: 3, role: 'forward' },
-        { type: 'way', ref: 2, role: 'forward' },
-    ]}));
+function relation(id: number, members: number[]): Relation {
+    return new Relation(pack({ type: 'relation', id }), {
+        type: 'relation',
+        id,
+        members: members.map(id => ({ type: 'way', ref: id, role: 'forward' })),
+    });
 }
 
 test('wayGroup append', () => {
     setup();
-    const r = get('r:1')! as Relation;
+    const r = relation(1, [1, 2]);
     expect(r.wayGroups.size).toBe(1);
+    expect(r.children[0].childIds).toMatchObject(['w:1', 'w:2']);
     expect(r.children[0].startsWithNode).toBe('n:1');
-    expect(r.children[0].endsWithNode).toBe('n:4');
+    expect(r.children[0].endsWithNode).toBe('n:3');
+});
+
+test('wayGroup prepend', () => {
+    setup();
+    const r = relation(1, [2, 1]);
+    expect(r.wayGroups.size).toBe(1);
+    expect(r.children[0].childIds).toMatchObject(['w:1', 'w:2']);
+    expect(r.children[0].startsWithNode).toBe('n:1');
+    expect(r.children[0].endsWithNode).toBe('n:3');
+});
+
+test('wayGroup append reverse', () => {
+    setup();
+    const r = relation(1, [1, 5]);
+    expect(r.wayGroups.size).toBe(1);
+    expect(r.children[0].childIds).toMatchObject(['w:1', '-w:5']);
+    expect(r.children[0].startsWithNode).toBe('n:1');
+    expect(r.children[0].endsWithNode).toBe('n:3');
+});
+
+test('wayGroup prepend reverse', () => {
+    setup();
+    const r = relation(1, [2, 6]);
+    expect(r.wayGroups.size).toBe(1);
+    expect(r.children[0].childIds).toMatchObject(['-w:6', 'w:2']);
+    expect(r.children[0].startsWithNode).toBe('n:1');
+    expect(r.children[0].endsWithNode).toBe('n:3');
 });
 
 test('wayGroup bridge', () => {
     setup();
-    const r = get('r:2')! as Relation;
+    const r = relation(1, [1, 3, 2]);
     expect(r.wayGroups.size).toBe(1);
     expect(r.children[0].startsWithNode).toBe('n:1');
     expect(r.children[0].endsWithNode).toBe('n:4');
