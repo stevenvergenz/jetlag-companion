@@ -114,8 +114,10 @@ export function WayPath({ id }: WayPathProps): ReactNode {
         }
     }
     
-    return way && <Polyline
-        positions={way.nodes.map(n => [n.lat, n.lon] as LatLngTuple) ?? []}
-        pathOptions={computeStyle()}
-    />;
+    if (way) {
+        return <Polyline
+            positions={way.nodes.map(n => [n.lat, n.lon] as LatLngTuple) ?? []}
+            pathOptions={computeStyle()}
+        />;
+    }
 }

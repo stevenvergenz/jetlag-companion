@@ -1,11 +1,11 @@
 import { ReactNode, useState, useEffect, useContext } from 'react';
-import { LatLngTuple, Map as LMap } from 'leaflet';
+import { LatLngBounds, LatLngExpression, LatLngTuple, Map as LMap } from 'leaflet';
 import { LayerGroup, Polygon, useMap } from 'react-leaflet';
+import Flatbush from 'flatbush';
 
 import { getAsync } from './overpass_api';
 import { Relation, Way } from './osm_element';
 import { Context } from './context';
-import { RTree } from './quadtree';
 
 export const Vec2 = {
     add: (a: LatLngTuple, b: LatLngTuple): LatLngTuple => [a[0] + b[0], a[1] + b[1]],
@@ -39,9 +39,23 @@ type WayLeg = {
 
 type RelationLeg = {
     id: number,
-    searchTree: RTree,
-    path: LatLngTuple[],
-    intersections: Map<number, [number, number]>,
+    searchTree: Flatbush,
+    pathSegments: PathSegment[],
+    intersections: Map<number, Intersection>,
+}
+
+type PathSegment = {
+    /** A leg path index */
+    start: LatLngTuple,
+    /** A leg path index */
+    end: LatLngTuple,
+    /** The bounding box formed by start and end */
+    bounds: [number, number, number, number],
+};
+
+type Intersection = {
+    segmentIndex: number,
+    intersectPoint: LatLngTuple,
 }
 
 /** Maximum distance in meters between adjacent ways to be merged */
@@ -58,15 +72,32 @@ async function generateBoundaryLoopPath(
     return mergeRelations(rs);
 
     function mergeRelations(relations: Relation[]): LatLngTuple[] | undefined {
-        const distanceFn = map.distance.bind(map);
         const legs = relations
             .map(r => {
                 const path = calcRelationPath(r);
+                const pathSegments = [] as PathSegment[];
+                const searchTree = new Flatbush(path.length - 1);
+                for (let i = 0; i < path.length - 1; i++) {
+                    const seg = {
+                        start: path[i],
+                        end: path[i+1],
+                        bounds: [
+                            Math.min(path[i][0], path[i+1][0]),
+                            Math.min(path[i][1], path[i+1][1]),
+                            Math.max(path[i][0], path[i+1][0]),
+                            Math.max(path[i][1], path[i+1][1]),
+                        ],
+                    } as PathSegment;
+                    pathSegments.push(seg);
+                    searchTree.add(...seg.bounds);
+                }
+                searchTree.finish();
+
                 return {
                     id: r.id,
-                    searchTree: new RTree(path),
+                    searchTree,
+                    pathSegments,
                     intersections: new Map(),
-                    path,
                 } as RelationLeg;
             })
             .reduce((map, leg) => {
@@ -74,34 +105,24 @@ async function generateBoundaryLoopPath(
                 return map;
             }, new Map<number, RelationLeg>());
 
-
         for (const leg of legs.values()) {
-            for (const other of [...legs.values()].filter(l => l.id !== leg.id)) {
-                let minIndex = -1;
-                let minDist = Infinity;
-                for (let i = 0; i < leg.path.length; i++) {
-                    const dist = other.searchTree.distance(leg.path[i], distanceFn);
-                    if (dist < minDist) {
-                        minIndex = i;
-                        minDist = dist;
+            for (const other of [...legs.values()].filter(o => o.id !== leg.id && !leg.intersections.has(o.id))) {
+                for (let i = 0; i < leg.pathSegments.length; i++) {
+                    const seg = leg.pathSegments[i];
+                    const ids = other.searchTree.search(...seg.bounds);
+                    if (ids.length > 1) {
+                        console.log('Intersection with more than 1 segment');
+                        return undefined;
+                    }
+                    else if (ids.length === 1) {
+                        const otherSeg = other.pathSegments[ids[0]];
+                        const intersection = calcIntersection(seg, otherSeg);
+                        if (intersection) {
+                            leg.intersections.set(other.id, { segmentIndex: i, intersectPoint: intersection });
+                            other.intersections.set(leg.id, { segmentIndex: ids[0], intersectPoint: intersection });
+                        }
                     }
                 }
-
-                if (minDist > MaxDistanceMeters) {
-                    continue;
-                }
-                
-                const nextIndex = minIndex + 1;
-                const prevIndex = minIndex - 1;
-                const nextDist = leg.path[nextIndex]
-                    ? other.searchTree.distance(leg.path[nextIndex], distanceFn)
-                    : Infinity;
-                const prevDist = leg.path[prevIndex] 
-                    ? other.searchTree.distance(leg.path[prevIndex], distanceFn) 
-                    : Infinity;
-                const nextClosest = nextDist < prevDist ? nextIndex : prevIndex;
-
-                leg.intersections.set(other.id, [minIndex, nextClosest]);
             }
         }
 
@@ -116,35 +137,34 @@ async function generateBoundaryLoopPath(
         while (!addedIds.has(id)) {
             const thisLeg = legs.get(id)!;
             if (thisLeg.intersections.size !== 2 || !thisLeg.intersections.has(from)) {
+                console.log(`Leg ${id} has ${thisLeg.intersections.size} intersections`);
                 return undefined;
             }
 
             // add from-intersection
-            if (!addedIds.has(from) && legs.get(from)?.intersections.has(id)) {
-                const fromLeg = legs.get(from)!;
-                const intersection = calcIntersection(fromLeg, thisLeg);
-                if (intersection) {
-                    mergedPath.push(intersection);
-                }
+            if (!addedIds.has(from)) {
+                mergedPath.push(thisLeg.intersections.get(from)!.intersectPoint);
             }
 
             // add id path
-            const [nearIndex1, nearIndex2] = thisLeg.intersections.get(from)!;
+            const nearSegId = thisLeg.intersections.get(from)!.segmentIndex;
             const farLegId = [...thisLeg.intersections.keys()].find(k => k !== from)!;
-            const [farIndex1, farIndex2] = thisLeg.intersections.get(farLegId)!;
-            const ordered = [nearIndex1, nearIndex2, farIndex1, farIndex2].sort();
-            const points = nearIndex1 < farIndex1
-                ? thisLeg.path.slice(ordered[1], ordered[2] + 1)
-                : thisLeg.path.slice(ordered[1], ordered[2] + 1).reverse();
-            mergedPath.push(...points);
+            const farSegId = thisLeg.intersections.get(farLegId)!.segmentIndex;
+            if (nearSegId < farSegId) {
+                mergedPath.push(...[
+                    ...thisLeg.pathSegments.slice(nearSegId, farSegId).map(s => s.end),
+                    thisLeg.pathSegments[farSegId].start,
+                ]);
+            } else {
+                mergedPath.push(...[
+                    thisLeg.pathSegments[nearSegId].start,
+                    ...thisLeg.pathSegments.slice(farSegId, nearSegId).map(s => s.end).reverse(),
+                ]);
+            }
 
             // add to-intersection
-            if (!addedIds.has(farLegId) && legs.get(farLegId)?.intersections.has(id)) {
-                const toLeg = legs.get(farLegId)!;
-                const intersection = calcIntersection(toLeg, thisLeg);
-                if (intersection) {
-                    mergedPath.push(intersection);
-                }
+            if (!addedIds.has(farLegId)) {
+                mergedPath.push(thisLeg.intersections.get(farLegId)!.intersectPoint);
             }
             
             // increment
@@ -156,17 +176,11 @@ async function generateBoundaryLoopPath(
         return mergedPath;
     }
 
-    function calcIntersection(leg1: RelationLeg, leg2: RelationLeg): LatLngTuple | undefined {
-        const leg1points = leg1.intersections.get(leg2.id)?.map(i => leg1.path[i]);
-        const leg2points = leg2.intersections.get(leg1.id)?.map(i => leg2.path[i]);
-        if (!leg1points || !leg2points || leg1points.length !== 2 || leg2points.length !== 2) {
-            return undefined;
-        }
-
-        const [x1, y1] = leg1points[0];
-        const [x2, y2] = leg1points[1];
-        const [x3, y3] = leg2points[0];
-        const [x4, y4] = leg2points[1];
+    function calcIntersection(seg1: PathSegment, seg2: PathSegment): LatLngTuple | undefined {
+        const [x1, y1] = seg1.start;
+        const [x2, y2] = seg1.end;
+        const [x3, y3] = seg2.start;
+        const [x4, y4] = seg2.end;
 
         const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
         if (denom === 0) {
@@ -289,7 +303,7 @@ async function generateBoundaryLoopPath(
 export function BoundaryLoop(): ReactNode {
     const map = useMap();
     const { editingBoundary, included, excluded } = useContext(Context);
-    const [path, setPath] = useState([] as LatLngTuple[]);
+    const [path, setPath] = useState([] as LatLngExpression[][]);
 
     useEffect(() => {
         if (!map) { return; }
@@ -299,12 +313,22 @@ export function BoundaryLoop(): ReactNode {
                     console.log('Boundary path not closed');
                     return;
                 }
-                setPath(p);
-                map.fitBounds(p);
+                const innerBounds = new LatLngBounds(p);
+                const outerBounds = innerBounds.pad(1);
+                setPath([
+                    [
+                        outerBounds.getNorthEast(), outerBounds.getNorthWest(),
+                        outerBounds.getSouthWest(), outerBounds.getSouthEast(),
+                    ],
+                    p,
+                ]);
+                map.fitBounds(innerBounds);
             });
     }, [included, excluded, map]);
 
-    return <LayerGroup>
-        { !editingBoundary && <Polygon pathOptions={{ color: 'green', weight: 5 }} positions={path}/> }
-    </LayerGroup>;
+    if (!editingBoundary) {
+        return <LayerGroup>
+            <Polygon pathOptions={{ color: 'black' }} positions={path} />
+        </LayerGroup>;
+    }
 }
