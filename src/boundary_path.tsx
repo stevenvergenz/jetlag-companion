@@ -23,7 +23,7 @@ const DisabledStyle: PathOptions = {
 };
 
 export function BoundaryLayer(): ReactNode {
-    const { included, excluded } = useContext(Context);
+    const { editingBoundary, included, excluded } = useContext(Context);
     const map = useMap();
 
     useEffect(() => {
@@ -58,7 +58,7 @@ export function BoundaryLayer(): ReactNode {
     }, [included, excluded, map]);
 
     return <LayerGroup>
-        {included.map(id => <RelationPath key={`rp${id}`} id={id} />)}
+        {editingBoundary && included.map(id => <RelationPath key={`rp${id}`} id={id} />)}
     </LayerGroup>;
 }
 

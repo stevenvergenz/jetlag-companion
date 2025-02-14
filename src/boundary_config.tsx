@@ -6,7 +6,11 @@ import { TreeNode } from './tree_node';
 import { Context } from './context';
 
 export function BoundaryConfig(): ReactNode {
-    const { included, setIncluded, save } = useContext(Context);
+    const {
+        editingBoundary, setEditingBoundary,
+        included, setIncluded,
+        save,
+    } = useContext(Context);
     const [newId, setNewId] = useState(undefined as number | undefined);
 
     function addRelation() {
@@ -16,7 +20,7 @@ export function BoundaryConfig(): ReactNode {
         }
     }
 
-    return <TreeNode id='boundaries' initiallyOpen={true}>
+    return <TreeNode id='boundaries' initiallyOpen={editingBoundary} onToggle={setEditingBoundary}>
         <span className='font-bold'>Boundaries</span>
         <TreeNode id='boundary-settings' initiallyOpen={true}>
             <span className='font-bold'>Settings</span>

@@ -1,6 +1,8 @@
 import { createContext, ReactNode, useState } from 'react';
 
 type Content = {
+    editingBoundary: boolean,
+    setEditingBoundary: (b: boolean) => void,
     hovering: number,
     setHovering: (n: number) => void,
     included: number[],
@@ -12,6 +14,8 @@ type Content = {
 };
 
 const dummyContent: Content = {
+    editingBoundary: false,
+    setEditingBoundary: () => {},
     hovering: 0,
     setHovering: () => {},
     included: [],
@@ -25,6 +29,7 @@ const dummyContent: Content = {
 export const Context = createContext(dummyContent as Content);
 
 export function ContextProvider({ children }: { children: ReactNode }) {
+    const [editingBoundary, setEditingBoundary] = useState(false);
     const [hovering, setHovering] = useState(0);
     const [included, setIncluded] = useState(
         JSON.parse(window.localStorage.getItem('boundary_included') ?? '[]') as number[]);
@@ -43,12 +48,17 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         setIncluded(i);
         setExcluded(e);
 
-        localStorage.setItem('boundary_included', JSON.stringify(included));
-        localStorage.setItem('boundary_excluded', JSON.stringify(excluded));
+        localStorage.setItem('boundary_included', JSON.stringify(i));
+        localStorage.setItem('boundary_excluded', JSON.stringify(e));
     }
 
-    return <Context.Provider value={
-        { hovering, setHovering, included, setIncluded, excluded, setExcluded, save }}>
+    const values = {
+        editingBoundary, setEditingBoundary,
+        hovering, setHovering,
+        included, setIncluded,
+        excluded, setExcluded,
+        save, };
+    return <Context.Provider value={values}>
         {children}
     </Context.Provider>;
 }

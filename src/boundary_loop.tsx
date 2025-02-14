@@ -1,10 +1,11 @@
 import { ReactNode, useState, useEffect, useContext } from 'react';
+import { LatLngTuple, Map as LMap } from 'leaflet';
+import { LayerGroup, Polygon, useMap } from 'react-leaflet';
 
 import { getAsync } from './overpass_api';
 import { Relation, Way } from './osm_element';
 import { Context } from './context';
-import { LatLngTuple, Map as LMap } from 'leaflet';
-import { LayerGroup, Polygon, useMap } from 'react-leaflet';
+import { RTree } from './quadtree';
 
 const Vec2 = {
     add: (a: LatLngTuple, b: LatLngTuple): LatLngTuple => [a[0] + b[0], a[1] + b[1]],
@@ -47,11 +48,14 @@ async function generateBoundaryLoopPath(included: number[], excluded: number[], 
     return mergeRelations(rs);
 
     function mergeRelations(relations: Relation[]): LatLngTuple[] {
-        let mergedPath = [] as LatLngTuple[];
-        for (const r of relations) {
-            mergedPath = mergedPath.concat(calcRelationPath(r));
-        }
-        return mergedPath;
+        map
+        const legs = relations.map(r => {
+            return {
+                id: r.id,
+                path: calcRelationPath(r),
+                searchTree: new RTree(calcRelationPath(r), (a, b) => map.distance(a, b)),
+            };
+        });
     }
     
     function calcRelationPath(relation: Relation): LatLngTuple[] {
@@ -115,11 +119,8 @@ async function generateBoundaryLoopPath(included: number[], excluded: number[], 
             }
     
             if (bestMatch.end && bestMatch.dist < MaxDistance && bestMatch.dot < MaxDot) {
-                console.log(`Matched end ${ref.id} to end ${bestMatch.end.id}`);
                 ref.continuedBy = bestMatch.end.id;
                 bestMatch.end.continuedBy = ref.id;
-            } else {
-                console.log(`No match found for end ${ref.id}`);
             }
         }
     
@@ -162,21 +163,23 @@ async function generateBoundaryLoopPath(included: number[], excluded: number[], 
         }
         return path;
     }
-    
 }
-
 
 export function BoundaryLoop(): ReactNode {
     const map = useMap();
-    const { included, excluded } = useContext(Context);
+    const { editingBoundary, included, excluded } = useContext(Context);
     const [path, setPath] = useState([] as LatLngTuple[]);
 
     useEffect(() => {
         if (!map) { return; }
-        generateBoundaryLoopPath(included, excluded, map).then(setPath);
+        generateBoundaryLoopPath(included, excluded, map)
+            .then((p) => {
+                setPath(p);
+                map.fitBounds(p);
+            });
     }, [included, excluded, map]);
 
     return <LayerGroup>
-        <Polygon pathOptions={{ color: 'green', weight: 5 }} positions={path}/>
+        { !editingBoundary && <Polygon pathOptions={{ color: 'green', weight: 5 }} positions={path}/> }
     </LayerGroup>;
 }
