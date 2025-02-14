@@ -61,9 +61,9 @@ async function query(query: string): Promise<Element[]> {
                 cache.set(id, new Relation(id, e));
                 break;
             case 'way':
-                if (id === 'w:909645217') {
-                    console.log('creating', e);
-                }
+                // if (id === 'w:909645217') {
+                //     console.log('creating', e);
+                // }
                 cache.set(id, new Way(id, e));
                 break;
             case 'node':

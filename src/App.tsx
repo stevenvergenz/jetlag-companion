@@ -22,6 +22,8 @@ export default function App(): ReactNode {
         >
           <TileLayer url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'></TileLayer>
           <BoundaryLayer />
+          <BoundaryLoop />
+          
         </MapContainer>
       </ContextProvider>
     </div>

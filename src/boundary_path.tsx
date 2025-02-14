@@ -116,12 +116,12 @@ export function WayPath({ id }: WayPathProps): ReactNode {
             return;
         }
 
-        if (way.id === 'w:909645217') {
-            console.log(way);
-        }
+        // if (way.id === 'w:909645217') {
+        //     console.log(way);
+        // }
 
         const relevantIds = [way.id, ...way.parentIds, ...way.parents.flatMap(wg => [...wg.parentIds])];
-        console.log(relevantIds);
+        // console.log(relevantIds);
         if (relevantIds.includes(hovering)) {
             setRenderOptions(HoveredStyle);
         }

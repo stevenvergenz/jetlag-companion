@@ -89,6 +89,12 @@ export class WayGroup extends GenericElement<Relation, Way> {
     private static interests = new Map<Id, Set<Id>>();
     private static knownIds = new Set<Id>();
 
+    public static reset() {
+        this.nextOffsets = {};
+        this.interests = new Map();
+        this.knownIds = new Set();
+    }
+
     public static setInterest(wayId: Id, relation: Relation) {
         if (this.knownIds.has(wayId)) {
             this.fulfillInterest(get(wayId) as Way, relation);
@@ -184,9 +190,9 @@ export class WayGroup extends GenericElement<Relation, Way> {
                 relation.wayGroups.delete(junior.id);
                 relation.childIds = relation.childIds.filter(id => id !== junior.id);
                 
-                way.parentIds.delete(junior.id);
-                if (way.id === 'w:909645217') {
-                    console.log(`Deleting way ${way.id} from way group ${junior.id}:`, way.parentIds);
+                for (const way of junior.children) {
+                    way.parentIds.delete(junior.id);
+                    way.parentIds.add(senior.id);
                 }
             }
         }
@@ -255,9 +261,9 @@ export class WayGroup extends GenericElement<Relation, Way> {
             return false;
         }
         
-        if (way.id === 'w:909645217') {
-            console.log(`Added way ${way.id} to way group ${this.id}:`, way.parentIds);
-        }
+        //if (way.id === 'w:909645217') {
+        //    console.log(`Added way ${way.id} to way group ${this.id}:`, way.parentIds);
+        //}
         
         return true;
     }

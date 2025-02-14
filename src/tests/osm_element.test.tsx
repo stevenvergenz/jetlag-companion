@@ -1,11 +1,12 @@
 import { expect, test } from 'vitest';
 
-import { Relation, Way, Node } from '../osm_element';
+import { Relation, Way, Node, WayGroup } from '../osm_element';
 import { cache } from '../overpass_api';
 import { pack } from '../id';
 
 function setup() {
     cache.clear();
+    WayGroup.reset();
 
     cache.set('n:1', new Node('n:1', { type: 'node', id: 1, lat:  1, lon: -1 }));
     cache.set('n:2', new Node('n:2', { type: 'node', id: 2, lat:  1, lon:  0 }));
@@ -110,34 +111,44 @@ test('wayGroup bridge prepend reverse', () => {
 test('parentage', () => {
     setup();
     const r = relation(9, [1, 4, 5]);
+    console.log(r.id);
     expect(r.childIds.length).toBe(1);
     expect(r.children.length).toBe(1);
 
     const wg = r.children[0];
+    console.log(wg.id);
     expect(wg.parentIds.size).toBe(1);
     expect(wg.parents.length).toBe(1);
     expect(wg.childIds.length).toBe(3);
     expect(wg.children.length).toBe(3);
 
-    const w0 = wg.children[0];
-    expect(w0.parentIds.size).toBe(1);
-    expect(w0.parents.length).toBe(1);
-    expect(w0.childIds.length).toBe(2);
-    expect(w0.children.length).toBe(2);
-
-    const w1 = wg.children[1];
+    const w1 = wg.children[0];
+    console.log(w1.id);
     expect(w1.parentIds.size).toBe(1);
     expect(w1.parents.length).toBe(1);
     expect(w1.childIds.length).toBe(2);
     expect(w1.children.length).toBe(2);
 
-    const w2 = wg.children[2];
-    expect(w2.parentIds.size).toBe(1);
-    expect(w2.parents.length).toBe(1);
-    expect(w2.childIds.length).toBe(2);
-    expect(w2.children.length).toBe(2);
+    const w5 = wg.children[1];
+    console.log(w5.id);
+    expect(w5.parentIds.size).toBe(1);
+    expect(w5.parents.length).toBe(1);
+    expect(w5.childIds.length).toBe(2);
+    expect(w5.children.length).toBe(2);
 
-    const n = w0.children[0];
+    const w4 = wg.children[2];
+    console.log(w4.id);
+    expect(w4.parentIds.size).toBe(1);
+    try {
+        expect(w4.parents.length).toBe(1);
+    } catch (e) {
+        console.log(w4.parentIds);
+        throw e;
+    }
+    expect(w4.childIds.length).toBe(2);
+    expect(w4.children.length).toBe(2);
+
+    const n = w1.children[0];
     expect(n.parentIds.size).toBe(2);
     expect(n.parents.length).toBe(2);
     expect(n.childIds.length).toBe(0);
