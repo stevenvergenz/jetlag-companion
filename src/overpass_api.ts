@@ -109,14 +109,20 @@ export async function requestAsync(ids: Id[]): Promise<Element[]> {
         }
     }
 
-    let items = (await Promise.all(ids.map(id => reqPromises.get(id)!))).flat();
+    const items = (await Promise.all(ids.map(id => reqPromises.get(id)!)))
+        .flat()
+        .reduce((set, e) => {
+            set.set(e.id, e);
+            return set;
+        }, new Map<Id, Element>());
+
     const ret = [] as Element[];
     for (const id of ids) {
-        const e = items.find(e => e.id === id)!;
+        const e = items.get(unreversed(id));
         if (!e) {
             console.log('Missing element:', id);
+            continue;
         }
-        items = items.filter(e => e.id !== id);
         ret.push(e);
     }
 

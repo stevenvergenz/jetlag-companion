@@ -186,7 +186,7 @@ export async function getAsync(ids: Id[], options = { request: false }): Promise
     }
 
     await Promise.all(
-        ids.filter(id => getPromises.has(id)).map(id => getPromises.get(id)!)
+        ids.map(id => getPromises.get(id)!)
     );
 
     return ids.map(id => get(id)!);

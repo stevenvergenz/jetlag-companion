@@ -4,18 +4,16 @@ import { get } from './overpass_cache';
 
 export class HierarchyHelper {
     private static interests = new Map<Id, Set<Id>>();
-    private static knownIds = new Set<Id>();
 
     public static reset() {
         this.interests = new Map();
-        this.knownIds = new Set();
     }
 
     public static setInterest(childId: Id, parent: Element) {
         parent.addChildUnique(childId);
-
-        if (this.knownIds.has(childId)) {
-            this.fulfillInterest(get(childId)!, parent);
+        const knownChild = get(childId);
+        if (knownChild) {
+            this.fulfillInterest(knownChild, parent);
         }
         else if (this.interests.has(childId)) {
             this.interests.get(childId)!.add(parent.id);
@@ -26,10 +24,11 @@ export class HierarchyHelper {
     }
 
     public static fulfillInterests(child: Element) {
-        this.knownIds.add(child.id);
         for (const rid of this.interests.get(child.id) ?? []) {
-            const r = get(rid)!;
-            this.fulfillInterest(child, r);
+            const r = get(rid);
+            if (r) {
+                this.fulfillInterest(child, r);
+            }
         }
         this.interests.delete(child.id);
     }
@@ -285,11 +284,6 @@ export class WayGroup extends Element {
 export class Way extends Element {
     public constructor(id: Id, data: OsmWay) {
         super(id, data);
-
-        for (const n of this.data.nodes) {
-            const nodeId = pack({ type: 'node', id: n });
-            HierarchyHelper.setInterest(nodeId, this);
-        }
     }
 
     public get data() { return this._data as OsmWay; }

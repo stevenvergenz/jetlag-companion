@@ -5,7 +5,7 @@ import { PathOptions } from 'leaflet';
 import { TreeNode } from './tree_node';
 import { Context } from './context';
 import { getByTransportTypeAsync } from './overpass_cache';
-import { Relation, Way, Node } from './element';
+import { Element, Relation, Way, Node } from './element';
 
 const StationStyle: PathOptions = {
     color: '#3388ff',
@@ -48,9 +48,9 @@ export function StationMarkers(): ReactNode {
         boundary: { editing, path },
         stations: { show, useTransitStations, busTransferThreshold },
     } = useContext(Context);
-    const [ stations, setStations ] = useState([] as Relation[]);
+    const [ stations, setStations ] = useState([] as Element[]);
 
-    /*useEffect(() => {
+    useEffect(() => {
         async function helper() {
             if (!path || path.length < 2) { return; }
 
@@ -60,10 +60,10 @@ export function StationMarkers(): ReactNode {
                 { request: true },
             );
 
-            setStations(res);
+            setStations(platforms);
         }
         helper();
-    }, [path, useTransitStations, busTransferThreshold]);*/
+    }, [path, useTransitStations, busTransferThreshold]);
 
     function modeString(stopArea: Relation): string {
         const modes = [];

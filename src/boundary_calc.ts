@@ -84,8 +84,6 @@ export async function generateBoundaryLoopPath(
 
     for (const r of rs) {
         r.calcWayGroups();
-        console.log(r.wayGroups);
-        console.log(r.childIds);
     }
     console.log('way groups calculated');
 

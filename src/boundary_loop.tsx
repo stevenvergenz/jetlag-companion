@@ -20,6 +20,7 @@ export function BoundaryLoop(): ReactNode {
     useEffect(() => {
         async function helper() {
             if (!map || editing || included.size === 0) { return; }
+            //console.log(included, excluded, map, editing, setPath, setErrors);
             
             let p: LatLngTuple[] | undefined;
             try {
