@@ -10,7 +10,7 @@ type OsmQueryResult = {
     elements: OsmElement[],
 };
 
-type OsmElementType = 'relation' | 'way' | 'node';
+export type OsmElementType = 'relation' | 'way' | 'node';
 type OsmCommon = {
     type: OsmElementType,
     id: number,
@@ -158,10 +158,7 @@ export class Node extends Element {
     public get lon() { return this.data.lon; }
 }
 
-async function req(type: 'relation', id: number): Promise<Relation>;
-async function req(type: 'way', id: number): Promise<Way>;
-async function req(type: 'node', id: number): Promise<Node>;
-async function req(type: OsmElementType, id: number): Promise<Element> {
+export async function get(type: OsmElementType, id: number): Promise<Element> {
     if (!cache.has(id)) {
         const res = await fetch(ENDPOINT, {
             method: 'POST',
@@ -190,15 +187,15 @@ async function req(type: OsmElementType, id: number): Promise<Element> {
 }
 
 export function getRelation(id: number): Promise<Relation> {
-    return req('relation', id);
+    return get('relation', id) as Promise<Relation>;
 }
 
 export function getWay(id: number): Promise<Way> {
-    return req('way', id);
+    return get('way', id) as Promise<Way>;
 }
 
-export async function getNode(id: number): Promise<Node> {
-    return req('node', id);
+export function getNode(id: number): Promise<Node> {
+    return get('node', id) as Promise<Node>;
 }
 
 /*

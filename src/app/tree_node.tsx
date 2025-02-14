@@ -15,15 +15,15 @@ export function TreeNode({ id, children, initiallyOpen, onMouseEnter, onMouseLea
         setOpen(!open);
     }
 
-    return <div onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
-        <div>
+    return <div>
+        <div onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
             <button type='button' onClick={toggle}>
                 { !Array.isArray(children) ? '•' : open ? '⮟' : '⮞' }
                 &nbsp;
                 {Array.isArray(children) ? children[0] : children}
             </button>
         </div>
-        <ol className={`ps-2 ${open ? '' : 'hidden'}`}>
+        <ol className={`ps-4 ${open ? '' : 'hidden'}`}>
             {Array.isArray(children) &&
                 children.slice(1).map((c, i) => <li key={`${id}-${i}`}>{c}</li>)}
         </ol>

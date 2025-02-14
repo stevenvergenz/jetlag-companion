@@ -1,17 +1,17 @@
-import { JSX, ReactNode, useEffect, useState } from 'react';
+import { JSX, useEffect, useState } from 'react';
 import { useMap } from '@vis.gl/react-google-maps';
 import { Way as OsmWay, getWay } from './overpass_api';
 import { TreeNode } from './tree_node';
+import { Way } from './way';
 import { onHover, onUnhover } from './hover_handler';
 
 type Props = {
     id: number,
 };
 
-export function Way({ id }: Props): ReactNode{
+export function WayGroup({ id }: Props): JSX.Element {
     const map = useMap();
     const [way, setWay] = useState(undefined as OsmWay | undefined);
-    const [feature, setFeature] = useState(undefined as google.maps.Data.Feature | undefined);
 
     useEffect(() => {
         async function go() {
@@ -25,20 +25,6 @@ export function Way({ id }: Props): ReactNode{
                 w = await getWay(id);
                 setWay(w);
             }
-
-            let f = feature;
-            if (!f) {
-                setFeature(f = map.data.add(new google.maps.Data.Feature({ id: w?.id })));
-            } else if (f.getId() !== id) {
-                map.data.remove(f);
-                setFeature(f = map.data.add(new google.maps.Data.Feature({ id: w?.id })));
-            }
-
-            f.setGeometry(new google.maps.Data.LineString(
-                w.nodes.map(n => {
-                    return { lat: n.lat, lng: n.lon } as google.maps.LatLngLiteral;
-                })
-            ));
         }
         
         go();
@@ -49,7 +35,7 @@ export function Way({ id }: Props): ReactNode{
             return <label>
                 <input type='checkbox' />
                 &nbsp;
-                {way.name} (w:
+                {way.name} (wg:
                 <a target='_blank' href={`https://www.openstreetmap.org/relation/${way.id}`}>{way.id}</a>
                 )
             </label>;
@@ -58,8 +44,10 @@ export function Way({ id }: Props): ReactNode{
         }
     }
 
-    return way && <TreeNode id={way.id.toString()} initiallyOpen={true}
-        onMouseEnter={onHover(map, [way.id])} onMouseLeave={onUnhover(map, [way.id])}>
+    return <TreeNode id={'g'+id.toString()} initiallyOpen={false}
+        onMouseEnter={onHover(map, way?.following.map(w => w.id))}
+        onMouseLeave={onUnhover(map, way?.following.map(w => w.id))}>
         { genLabel() }
+        { way?.following.map(w => <Way key={w.id} id={w.id} />) }
     </TreeNode>;
 }
