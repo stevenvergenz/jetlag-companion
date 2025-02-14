@@ -156,6 +156,7 @@ export async function requestStations(
     busTransferThreshold: number,
 ): Promise<Node[]> {
     const polyStr = poly.flat().map(n => n?.toPrecision(6)).join(' ');
+    
     let ids: Id[] = [];
     if (!stationCache.has(polyStr)) {
         // relation[public_transport=stop_area] describes a group of stops
@@ -164,31 +165,28 @@ export async function requestStations(
         // nw[public_transport=platform] describes a transit stop
         // relation[type=route] describes a route variant going to a platform
         // relation[type=route_master] describes a full route with all variants
-
-        const stationQuery = `
-            node.all[public_transport=station] -> .stations;
-            (
-                .result;
-                .stations;
-            ) -> .result;
-        `;
-
-        const busQuery = `
-            node.all[highway='bus_stop'] -> .stops;
-            relation(bn.stops)[type='route'][route='bus'] -> .variants;
-            relation(br.variants)[type='route_master'][route_master='bus'] -> .routes;
-            (
-                .result;
-                .stops;
-                .variants;
-                .routes;
-            ) -> .result;`
-
         const q = `
-            node(poly:"${polyStr}") -> .all;
-            ${useTransitStations ? stationQuery : ''}
-            ${busTransferThreshold > 0 ? busQuery : ''}
-            .result;
+            nwr(poly:"${polyStr}") -> .all;
+            rel.all[public_transport=stop_area] -> .areas;
+            way(r.areas: platform) -> .platform_ways;
+            node(r.areas: platform) -> .platform_nodes;
+            way.all[public_transport=station] -> .station_ways;
+            node.all[public_transport=station] -> .station_nodes;
+            (
+                rel(bw.platform_ways: platform)[type=route];
+                rel(bn.platform_nodes: platform)[type=route];
+            ) -> .routes;
+            rel(br.routes)[type=route_master] -> .route_masters;
+            
+            (
+                .areas;
+                .platform_ways;
+                .platform_nodes;
+                .station_ways;
+                .station_nodes;
+                .routes;
+                .route_masters;
+            );
         `;
         ids = (await query(q)).filter(id => unpack(id).type === 'node');
         stationCache.set(polyStr, ids);
