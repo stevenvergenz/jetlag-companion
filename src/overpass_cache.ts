@@ -189,11 +189,11 @@ export function get(id: Id): Element | undefined {
     }
 }
 
-export async function getByTransportTypeAsync(
+export async function getByTransportTypeAsync<T extends Element>(
     bounds: LatLngTuple[], 
     transportType: TransportType, 
     { request } = { request: false },
-): Promise<Element[]> {
+): Promise<T[]> {
     const cleanBounds = bounds.flatMap(b => b.slice(0, 2)).map(n => n?.toFixed(4)).join(' ');
     const rawBuf = Uint8Array.from(cleanBounds.split('').map(c => c.charCodeAt(0)));
     const cleanBoundsBuf = (await window.crypto.subtle.digest('SHA-256', rawBuf));
@@ -210,5 +210,5 @@ export async function getByTransportTypeAsync(
 
     db.close();
     return es.filter(e => 
-        e.data.tags?.public_transport === transportType || e.data.tags?.type === transportType);
+        e.data.tags?.public_transport === transportType || e.data.tags?.type === transportType) as T[];
 }

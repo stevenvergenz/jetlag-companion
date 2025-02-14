@@ -2,17 +2,67 @@ import { ReactNode, useState, useEffect, useContext } from 'react';
 import { CircleMarker, LayerGroup, Polygon, Tooltip } from 'react-leaflet';
 import { PathOptions } from 'leaflet';
 
+import { Id } from './id';
 import { TreeNode } from './tree_node';
 import { Context } from './context';
 import { getByTransportTypeAsync } from './overpass_cache';
 import { Element, Relation, Way, Node } from './element';
 
-type Station = {
-    stopArea?: Relation,
-    station?: Way | Node,
-    platforms: (Way | Node)[],
-    routes: Relation[],
-};
+class StationGroup {
+    private static findUp<T extends Element>(tag: string, es: Map<Id, Element>): Map<Id, T> {
+        return this.find(tag, [...es.values()].flatMap(e => e.parents));
+    }
+    
+    private static findDown<T extends Element>(tag: string, es: Map<Id, Element>): Map<Id, T> {
+        return this.find(tag, [...es.values()].flatMap(e => e.children));
+    }
+
+    private static find<T extends Element>(tag: string, es: Element[]): Map<Id, T> {
+        return es
+            .filter(e => [e.data.tags?.public_transport, e.data.tags?.type].includes(tag))
+            .reduce((map, e) => {
+                map.set(e.id, e as T);
+                return map;
+            }, new Map<Id, T>());
+    }
+
+    public station?: Way | Node;
+    public stopAreas: Map<Id, Relation> = new Map();
+    public platforms: Map<Id, (Way | Node)> = new Map();
+    public routeMasters: Map<Id, Relation> = new Map();
+
+    public add(platform: Way | Node) {
+        this.platforms.set(platform.id, platform);
+
+        this.stopAreas = StationGroup.findUp<Relation>('stop_area', this.platforms);
+        
+        this.station = [...this.stopAreas.values()]
+            .flatMap(s => s.children)
+            .find(c => 
+                (c instanceof Way || c instanceof Node) 
+                && c.data.tags?.public_transport === 'station'
+            ) as Way | Node | undefined;
+
+        if (this.station) {
+            this.stopAreas = StationGroup.findUp<Relation>('stop_area',
+                new Map<Id, Element>([[this.station.id, this.station]]));
+        }
+
+        if (this.stopAreas.size > 0) {
+            this.platforms = StationGroup.findDown('platform', this.stopAreas);
+        }
+
+        const routes = StationGroup.findUp<Relation>('route', this.platforms);
+
+        this.routeMasters = StationGroup.findUp<Relation>('route_master', routes);
+    }
+
+    public has(element: Element): boolean {
+        return this.platforms.has(element.id)
+            || this.stopAreas.has(element.id)
+            || this.station?.id === element.id;
+    }
+}
 
 const StationStyle: PathOptions = {
     color: '#3388ff',
@@ -55,27 +105,33 @@ export function StationMarkers(): ReactNode {
         boundary: { editing, path },
         stations: { show, useTransitStations, busTransferThreshold },
     } = useContext(Context);
-    const [ stations, setStations ] = useState([] as Element[]);
+    const [ stations, setStations ] = useState([] as StationGroup[]);
 
     useEffect(() => {
         async function helper() {
             if (!path || path.length < 2) { return; }
 
-            const platforms = await getByTransportTypeAsync(
+            const platforms = await getByTransportTypeAsync<Way | Node>(
                 path, 
                 'platform',
                 { request: true },
             );
 
-            const nodes = platforms.filter(p => p instanceof Node) as Node[];
-            const ways = platforms.filter(p => p instanceof Way) as Way[];
-            console.log(`Found ${platforms.length} platforms (${nodes.length} nodes, ${ways.length} ways)`);
-            setStations(platforms);
+            const stations = [] as StationGroup[];
+            for (const platform of platforms) {
+                let station = stations.find(s => s.has(platform));
+                if (!station) {
+                    station = new StationGroup();
+                    stations.push(station);
+                }
+                station.add(platform);
+            }
+            setStations(stations);
         }
         helper();
     }, [path, useTransitStations, busTransferThreshold]);
 
-    function modeString(stopArea: Relation): string {
+    function modeString(station: StationGroup): string {
         const modes = [];
         const stations = stopArea.children.filter(c => c.data.tags?.public_transport === 'station');
         if (stations.length > 0) {
@@ -102,7 +158,7 @@ export function StationMarkers(): ReactNode {
         return modes.join(', ');
     }
 
-    function renderStation(stopArea: Element): ReactNode {
+    function renderStation(station: StationGroup): ReactNode {
         const marker = stopArea.children.find(c => c.data.tags?.public_transport === 'station')
             ?? stopArea.children.find(c => c.data.tags?.public_transport === 'platform');
 
