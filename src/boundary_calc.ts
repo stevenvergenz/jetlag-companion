@@ -71,7 +71,9 @@ export async function generateBoundaryLoopPath(
     return mergeRelations(rs as Relation[], excluded, distanceFn);
 }
 
-export function mergeRelations(relations: Relation[], excluded: Id[], distanceFn: DistanceFn): LatLngTuple[] | undefined {
+export function mergeRelations(
+    relations: Relation[], excluded: Id[], distanceFn: DistanceFn,
+): LatLngTuple[] | undefined {
     const legs = relations
         .map(r => {
             const path = calcRelationPath(r, excluded, distanceFn);
@@ -153,11 +155,11 @@ export function mergeRelations(relations: Relation[], excluded: Id[], distanceFn
         if (nearSegId < farSegId) {
             mergedPath.push(...[
                 ...thisLeg.pathSegments.slice(nearSegId, farSegId).map(s => s.end),
-                thisLeg.pathSegments[farSegId].start,
+                //thisLeg.pathSegments[farSegId].start,
             ]);
         } else {
             mergedPath.push(...[
-                thisLeg.pathSegments[nearSegId].start,
+                //thisLeg.pathSegments[nearSegId].start,
                 ...thisLeg.pathSegments.slice(farSegId, nearSegId).map(s => s.end).reverse(),
             ]);
         }

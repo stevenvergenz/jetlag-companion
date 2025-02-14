@@ -122,6 +122,6 @@ test('Merge closed', () => {
     const r3 = relation(3, [7]);
     const r4 = relation(4, [9]);
     const loop = mergeRelations([r1, r2, r3, r4], [], distance);
-    const realLoop = nodes(11, 8, 4, 5, 6, 9, 13, 12).map(n => [n.lat, n.lon]);
+    const realLoop = nodes(4, 8, 11, 12, 13, 9, 6, 5).map(n => [n.lat, n.lon]);
     expect(loop).toEqual(realLoop);
 });
