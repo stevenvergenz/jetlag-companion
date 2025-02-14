@@ -3,16 +3,18 @@ import { Id, pack, unpack, unreversed } from './id';
 import { Element, Node, Relation, Way, WayGroup } from './element';
 import { OsmElement, OsmElementType, requestAsync, requestTransport } from './overpass_api';
 
+type TransportType = 'platform' | 'station' | 'stop_area' | 'route' | 'route_master';
+
 type TransportDbItem = {
     bounds: string,
-    transportType: string,
+    transportType: TransportType,
     type: OsmElementType,
     id: number,
 };
 
 const memCacheId = new Map<Id, Element>();
-const memCacheTransport = new Map<string, Id[]>();
-let memCacheTransportBounds: string;
+let memCacheTransport: Set<Id> | undefined;
+let memCacheTransportBounds: string | undefined;
 const getPromises = new Map<Id, Promise<Element[]>>();
 const getCallbacks = new Map<Id, (e: Element[]) => void>();
 
@@ -28,9 +30,8 @@ async function dbInit(): Promise<IDBDatabase> {
 
     req.addEventListener('upgradeneeded', () => {
         req.result.createObjectStore('elements', { keyPath: ['type', 'id'] });
-
-        const tstore = req.result.createObjectStore('transport', { keyPath: 'bounds'});
-        tstore.createIndex('bounds', 'bounds', { unique: false }); 
+        const tstore = req.result.createObjectStore('transport', { keyPath: ['bounds', 'type', 'id']});
+        tstore.createIndex('bounds', 'bounds', { unique: false });
     });
 
     return await dbReq(req);
@@ -54,16 +55,15 @@ async function dbPut(db: IDBDatabase, es: Element[], bounds?: string): Promise<v
             )) {
                 if (memCacheTransportBounds !== bounds) {
                     memCacheTransportBounds = bounds;
-                    memCacheTransport.clear();
+                    memCacheTransport = new Set<Id>();
                 }
 
-                memCacheTransport.set(
-                    e.data.tags.public_transport!,
-                    [...(memCacheTransport.get(e.data.tags.public_transport!) ?? []), e.id]);
+                const tType = (e.data.tags.public_transport ?? e.data.tags.type) as TransportType;
+                memCacheTransport?.add(e.id);
                     
                 await dbReq(tStore.put({
                     bounds, 
-                    transportType: e.data.tags?.public_transport ?? e.data.tags.type, 
+                    transportType: tType, 
                     type: e.data.type,
                     id: e.data.id,
                 } satisfies TransportDbItem));
@@ -103,16 +103,16 @@ async function dbGetById(db: IDBDatabase, ids: Id[]): Promise<Element[]> {
     return ids.map(id => memCacheId.get(id)).filter(e => e !== undefined) as Element[];
 }
 
-async function dbGetByTransportType(db: IDBDatabase, bounds: string, transportType: string): Promise<Element[]> {
+async function dbGetTransportByBounds(db: IDBDatabase, bounds: string): Promise<Element[]> {
     const tx = db.transaction(['transport', 'elements'], 'readonly');
     const tStore = tx.objectStore('transport');
 
     let ids = [] as Id[];
-    if (memCacheTransportBounds === bounds && memCacheTransport.has(transportType)) {
-        ids = memCacheTransport.get(transportType)!;
+    if (memCacheTransportBounds !== undefined && memCacheTransportBounds === bounds && memCacheTransport) {
+        ids = [...memCacheTransport];
     }
     else {
-        const items = await dbReq(tStore.getAll([bounds, transportType])) as TransportDbItem[];
+        const items = await dbReq(tStore.index('bounds').getAll(bounds)) as TransportDbItem[];
         ids = items.map(item => pack({ type: item.type, id: item.id }));
     }
 
@@ -191,21 +191,24 @@ export function get(id: Id): Element | undefined {
 
 export async function getByTransportTypeAsync(
     bounds: LatLngTuple[], 
-    transportType: string, 
+    transportType: TransportType, 
     { request } = { request: false },
 ): Promise<Element[]> {
     const cleanBounds = bounds.flatMap(b => b.slice(0, 2)).map(n => n?.toFixed(4)).join(' ');
+    const rawBuf = Uint8Array.from(cleanBounds.split('').map(c => c.charCodeAt(0)));
+    const cleanBoundsBuf = (await window.crypto.subtle.digest('SHA-256', rawBuf));
+    const cleanBoundsHash = [...new Uint8Array(cleanBoundsBuf)]
+        .map(n => `00${n.toString(16)}`.substring(n < 16 ? 1 : 2)).join('');
+
     const db = await dbInit();
 
-    const localEs = await dbGetByTransportType(db, cleanBounds, transportType);
-    if (!request || localEs.length > 0) {
-        db.close();
-        return localEs;
+    let es = await dbGetTransportByBounds(db, cleanBoundsHash);
+    if (request && es.length === 0) {
+        es = await requestTransport(cleanBounds);
+        await dbPut(db, es, cleanBoundsHash);
     }
 
-    const reqEs = await requestTransport(cleanBounds);
-    await dbPut(db, reqEs, cleanBounds);
-
     db.close();
-    return reqEs;
+    return es.filter(e => 
+        e.data.tags?.public_transport === transportType || e.data.tags?.type === transportType);
 }
