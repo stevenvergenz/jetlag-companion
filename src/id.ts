@@ -1,4 +1,4 @@
-import { OsmElement, OsmElementType } from "./overpass_api";
+import { OsmElementType } from "./overpass_api";
 
 export type Id = string;
 
@@ -46,8 +46,11 @@ export function pack(obj: IdUnpacked): Id {
     }
 }
 
-export function packFrom(data: OsmElement): Id {
-    return pack({ type: data.type, id: data.id });
+export function packFrom({ type, id, ref }: { type: OsmElementType, id?: number, ref?: number}): Id {
+    if (id === undefined && ref === undefined) {
+        throw new Error('id or ref must be defined');
+    }
+    return pack({ type, id: (id ?? ref)! });
 }
 
 export function reverse(id: Id): Id {

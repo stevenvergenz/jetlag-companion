@@ -6,8 +6,9 @@ const endpoint = 'https://overpass-api.de/api/interpreter';
 
 export const cache = new Map<Id, Element>();
 
-const fetchPromises = new Map<Id, Promise<Element[]>>();
-const getPromiseResolves = new Map<Id, (e: Element) => void>();
+const reqPromises = new Map<Id, Promise<void>>();
+const getPromises = new Map<Id, Promise<Element>>();
+const getCallbacks = new Map<Id, (e: Element) => void>();
 
 type OsmQueryResult = {
     version: string,
@@ -48,7 +49,7 @@ export type OsmElement = OsmRelation | OsmWay | OsmNode;
 
 const QueryLimit = 10 * 1024 * 1024; // 2MB
 
-async function query(query: string): Promise<Element[]> {
+async function query(query: string): Promise<Id[]> {
     const res = await fetch(endpoint, {
         method: 'POST',
         body: `[maxsize:${QueryLimit}][out:json]; ${query} out;`,
@@ -62,9 +63,6 @@ async function query(query: string): Promise<Element[]> {
                 cache.set(id, new Relation(id, e));
                 break;
             case 'way':
-                // if (id === 'w:909645217') {
-                //     console.log('creating', e);
-                // }
                 cache.set(id, new Way(id, e));
                 break;
             case 'node':
@@ -73,13 +71,11 @@ async function query(query: string): Promise<Element[]> {
         }
     }
 
-    return body.elements.map(e => get(packFrom(e))!);
+    return body.elements.map(e => packFrom(e));
 }
 
-async function fetchAsyncInternal(ids: Id[]): Promise<Element[]> {
-    const promiseIds = ids.filter(id => fetchPromises.has(id));
+async function requestAsyncInternal(ids: Id[]): Promise<void> {
     const queryIdParts = ids
-        .filter(id => !cache.has(id) && !fetchPromises.has(id))
         .map(id => unpack(id))
         .filter(iu => iu.type !== 'wayGroup');
     if (queryIdParts.length > 0) {
@@ -100,45 +96,39 @@ async function fetchAsyncInternal(ids: Id[]): Promise<Element[]> {
         q = `(${q});`;
         await query(q);
     }
-
-    if (promiseIds.length > 0) {
-        await Promise.all(promiseIds.map(id => fetchPromises.get(id)).filter(p => p !== undefined));
-    }
-    
-    return ids.map(id => get(id)!);
 }
 
-export function fetchAsync(ids: Id[]): Promise<Element[]> {
+export function requestAsync(...ids: Id[]): Promise<Element[]> {
     ids = ids.map(id => unreversed(id));
-    const queryIds = ids.filter(id => !cache.has(id));
+    const queryIds = ids.filter(id => !reqPromises.has(id));
     if (queryIds.length > 0) {
-        const p = fetchAsyncInternal(queryIds)
-            .finally(() => {
-                for (const id of queryIds) {
-                    fetchPromises.delete(id);
-                }
-            });
-
+        const p = requestAsyncInternal(queryIds);
         for (const id of queryIds) {
-            fetchPromises.set(id, p);
+            reqPromises.set(id, p);
         }
     }
 
-    return Promise.all(ids.map(async (id) => {
-        if (fetchPromises.has(id)) {
-            return (await fetchPromises.get(id)!).find(e => e.id === id)!;
+    return getAsync(...ids);
+}
+
+export function getAsync(...ids: Id[]): Promise<Element[]> {
+    return Promise.all(ids.map(id => {
+        if (getPromises.has(id)) {
+            return getPromises.get(id)!;
+        }
+        else if (reqPromises.has(id)) {
+            const p = reqPromises.get(id)!.then(() => get(id)!);
+            getPromises.set(id, p);
+            return p;
         }
         else {
-            return get(id)!;
+            const p = new Promise<Element>((resolve) => {
+                getCallbacks.set(id, resolve);
+            });
+            getPromises.set(id, p);
+            return p;
         }
     }));
-}
-
-export async function getAsync(id: Id): Promise<Element> {
-    if (getPromiseResolves.has(id)) {
-        await fetchPromises.get(id);
-    }
-    return get(id)!;
 }
 
 export function get(id: Id): Element | undefined {
@@ -152,7 +142,7 @@ export function get(id: Id): Element | undefined {
     }
 }
 
-export async function fetchStations(poly: LatLngTuple[], useTransitStations: boolean): Promise<Node[]> {
+export function requestStations(poly: LatLngTuple[], useTransitStations: boolean): Promise<Node[]> {
     const polyStr = poly.flat().join(' ');
     const q = `
         node(poly:"${polyStr}")->.a;
@@ -160,5 +150,5 @@ export async function fetchStations(poly: LatLngTuple[], useTransitStations: boo
             ${useTransitStations ? 'node.a[public_transport=station][railway=station];' : ''}
         );
     `;
-    return await query(q) as Node[];
+    return query(q).then(ids => ids.map(id => get(id) as Node));
 }

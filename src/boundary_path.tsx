@@ -3,7 +3,7 @@ import { LatLngTuple, LatLngBounds, PathOptions } from 'leaflet';
 import { LayerGroup, Polyline, useMap } from 'react-leaflet';
 
 import { Id } from './id';
-import { fetchAsync } from './overpass_api';
+import { getAsync } from './overpass_api';
 import { Relation, WayGroup, Way } from './osm_element';
 import { Context } from './context';
 
@@ -41,7 +41,7 @@ export function BoundaryLayer(): ReactNode {
     
             const bounds = new LatLngBounds(
                 // loaded enabled relations
-                (await fetchAsync([...included].filter(notExcluded)) as Relation[])
+                (await getAsync(...[...included].filter(notExcluded)) as Relation[])
                 // enabled way groups
                 .flatMap(r => r.children.filter(notExcluded))
                 // enabled ways
@@ -75,7 +75,7 @@ export function RelationPath({ id }: RelationPathProps): ReactNode {
 
     useEffect(() => {
         if (!relation || relation.id !== id) {
-            fetchAsync([id]).then(([r]) => setRelation(r as Relation));
+            getAsync(id).then(([r]) => setRelation(r as Relation));
         }
     }, [id, relation]);
 
@@ -109,7 +109,7 @@ export function WayPath({ id }: WayPathProps): ReactNode {
 
     useEffect(() => {
         if (!way || way.id !== id) {
-            fetchAsync([id]).then(([w]) => setWay(w as Way));
+            getAsync(id).then(([w]) => setWay(w as Way));
         }
     }, [id, way]);
 

@@ -4,7 +4,7 @@ import { PathOptions } from 'leaflet';
 
 import { TreeNode } from './tree_node';
 import { Context } from './context';
-import { fetchStations } from './overpass_api';
+import { requestStations } from './overpass_api';
 import { Node } from './osm_element';
 
 const StationStyle: PathOptions = {
@@ -56,7 +56,7 @@ export function StationMarkers(): ReactNode {
     useEffect(() => {
         async function helper() {
             if (!path || path.length < 2) { return; }
-            const res = await fetchStations(path, useTransitStations);
+            const res = await requestStations(path, useTransitStations);
             setRail(res.filter(n => n.data.tags?.railway === 'station'));
             setBus(res.filter(n => n.data.tags?.highway === 'bus_stop'));
         }
