@@ -66,7 +66,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
             const ways = await getAsync('way', wayIds);
 
             const nodeIds = ways
-                .filter(w => !excluded.includes(w.id) && !excluded.includes(-w.first.id))
+                .filter(w => !excluded.includes(w.id))
                 .flatMap(w => w.data.nodes);
             await getAsync('node', nodeIds);
 

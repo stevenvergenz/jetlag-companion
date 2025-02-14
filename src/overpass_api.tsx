@@ -1,14 +1,12 @@
 import { LatLngTuple } from 'leaflet';
 import { Element, Node, Relation, Way } from './osm_element';
+import { Id, packFrom, unpack } from './id';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';
 
-const cache: {[type: string]: Map<number, Element>} = {
-    'relation': new Map<number, Relation>(),
-    'way': new Map<number, Way>(),
-    'node': new Map<number, Node>(),
-};
-const promises = new Map<number, Promise<Element[]>>();
+const cache = new Map<Id, Element>();
+
+const promises = new Map<Id, Promise<Element[]>>();
 
 type OsmQueryResult = {
     version: string,
@@ -16,7 +14,7 @@ type OsmQueryResult = {
     elements: OsmElement[],
 };
 
-export type OsmElementType = 'relation' | 'way' | 'node';
+export type OsmElementType = 'relation' | 'way' | 'node' | 'wayGroup';
 type OsmCommon = {
     type: OsmElementType,
     id: number,
@@ -59,38 +57,49 @@ async function query(query: string): Promise<Element[]> {
     for (const e of body.elements) {
         switch (e.type) {
             case 'relation':
-                cache[e.type].set(e.id, new Relation(e));
+                cache.set(packFrom(e), new Relation(e));
                 break;
             case 'way':
-                cache[e.type].set(e.id, new Way(e));
+                cache.set(packFrom(e), new Way(e));
                 break;
             case 'node':
-                cache[e.type].set(e.id, new Node(e));
+                cache.set(packFrom(e), new Node(e));
                 break;
         }
     }
 
-    return body.elements.map(e => cache[e.type].get(e.id)!);
+    return body.elements.map(e => cache.get(packFrom(e))!);
 }
 
-async function getAsyncInternal(type: OsmElementType, ids: number[], recurse = false): Promise<Element[]> {
-    const queryIds = ids.filter(id => !cache[type].has(id));
-    if (queryIds.length > 0) {
+async function getAsyncInternal(ids: Id[], recurse = false): Promise<Element[]> {
+    const idParts = ids.filter(id => !cache.has(id)).map(id => unpack(id));
+    if (idParts.length > 0) {
+        const relationIds = idParts.filter(p => p.type === 'relation').map(p => p.id);
+        const wayIds = idParts.filter(p => p.type === 'way').map(p => p.id);
+        const nodeIds = idParts.filter(p => p.type === 'node').map(p => p.id);
+
+        let q = '';
+        if (relationIds.length > 0) {
+            q += `relation(id:${relationIds.join(',')});`;
+        }
+        if (wayIds.length > 0) {
+            q += `way(id:${wayIds.join(',')});`;
+        }
+        if (nodeIds.length > 0) {
+            q += `node(id:${nodeIds.join(',')});`;
+        }
         const recurseQuery = recurse ? '>>;' : '';
-        const q = `${type}(id:${queryIds.join(',')}); ${recurseQuery}`;
+        q = `(${q}); ${recurseQuery}`;
         await query(q);
     }
     
-    return ids.map(id => cache[type].get(id)!);
+    return ids.map(id => cache.get(id)!);
 }
 
-export function getAsync(type: 'relation', ids: number[], recurse?: boolean): Promise<Relation[]>;
-export function getAsync(type: 'way', ids: number[], recurse?: boolean): Promise<Way[]>;
-export function getAsync(type: 'node', ids: number[], recurse?: boolean): Promise<Node[]>;
-export function getAsync(type: OsmElementType, ids: number[], recurse = false): Promise<Element[]> {
-    const queryIds = ids.filter(id => !cache[type].has(id) || recurse && !cache[type].get(id)!.complete);
+export function getAsync(ids: Id[], recurse = false): Promise<Element[]> {
+    const queryIds = ids.filter(id => !cache.has(id) || recurse && !cache.get(id)!.complete);
     if (queryIds.length > 0) {
-        const p = getAsyncInternal(type, queryIds, recurse)
+        const p = getAsyncInternal(queryIds, recurse)
             .finally(() => {
                 for (const id of queryIds) {
                     promises.delete(id);
@@ -107,16 +116,13 @@ export function getAsync(type: OsmElementType, ids: number[], recurse = false): 
             return (await promises.get(id)!).find(e => e.id === id)!;
         }
         else {
-            return cache[type].get(id)!;
+            return cache.get(id)!;
         }
     }));
 }
 
-export function get(type: 'relation', id: number): Relation | undefined;
-export function get(type: 'way', id: number): Way | undefined;
-export function get(type: 'node', id: number): Node | undefined;
-export function get(type: OsmElementType, id: number): Element | undefined {
-    return cache[type].get(id);
+export function get(id: Id): Element | undefined {
+    return cache.get(id);
 }
 
 export async function getStations(poly: LatLngTuple[]): Promise<Node[]> {

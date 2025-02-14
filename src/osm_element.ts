@@ -1,21 +1,19 @@
 import { OsmElement, OsmNode, OsmRelation, OsmWay, get } from "./overpass_api";
+import { Id, packFrom } from './id';
 
 export abstract class Element {
-    static parentIds = new Map<number, number[]>();
+    protected static parentIds = new Map<Id, Id[]>();
 
+    public readonly id: Id;
+
+    protected readonly _data: OsmElement;
+    public abstract get data(): OsmElement;
+
+    protected readonly _parentIds = new Set<Id>();
     public abstract get parents(): Element[];
 
+    protected readonly _childIds = new Set<Id>();
     public abstract get children(): Element[];
-
-    protected _data: OsmElement;
-
-    public constructor(data: OsmElement) {
-        this._data = data;
-    }
-
-    public get id(): number {
-        return this._data.id;
-    }
 
     public get name(): string {
         return this._data.tags?.['name'] 
@@ -28,45 +26,53 @@ export abstract class Element {
         return this.children.every(c => c?.complete);
     }
 
-    public get completeIds(): number[] {
+    public get completeIds(): Id[] {
         return [this.id, ...this.children.flatMap(c => c?.completeIds)];
     }
+
+    public constructor(id: Id, data: OsmElement) {
+        this.id = id;
+        this._data = data;
+    }
+
 }
 
 export class Relation extends Element {
     public wayGroups: WayGroup[] = [];
 
-    public constructor(data: OsmRelation) {
-        super(data);
+    public constructor(id: Id, data: OsmRelation) {
+        super(id, data);
 
         for (const w of this.data.members.filter(m => m.type === 'way')) {
-            Element.parentIds.set(w.ref, [...(Element.parentIds.get(w.ref) ?? []), this.id]);
-            WayGroup.setInterest(w.ref, this);
+            const memberId = packFrom({ type: w.type, id: w.ref });
+            Element.parentIds.set(memberId, [...(Element.parentIds.get(memberId) ?? []), this.id]);
+            this._childIds.add(memberId);
+            WayGroup.setInterest(memberId, this);
         }
     }
 
-    public get data() { return this._data as OsmRelation; }
+    public get data() {
+        return this._data as OsmRelation;
+    }
 
     public get parents() {
         return [];
     }
 
     public get children(): Way[] {
-        return this.data.members
-            .map((m) => m.ref)
-            .filter((id, i, arr) => !arr.slice(0, i).includes(id))
-            .map((id) => get('way', id)!)
+        return [...this._childIds]
+            .map((id) => get(id) as Way)
             .filter((w) => w !== undefined);
     }
 }
 
 export class WayGroup {
-    private static interests = new Map<number, Relation[]>();
-    private static knownIds = new Set<number>();
+    private static interests = new Map<Id, Relation[]>();
+    private static knownIds = new Set<Id>();
 
-    public static setInterest(wayId: number, relation: Relation) {
+    public static setInterest(wayId: Id, relation: Relation) {
         if (this.knownIds.has(wayId)) {
-            this.fulfillInterest(get('way', wayId)!, relation);
+            this.fulfillInterest(get(wayId) as Way, relation);
         }
         else {
             this.interests.set(wayId, [...(this.interests.get(wayId) ?? []), relation]);
@@ -195,6 +201,10 @@ export class Way extends Element {
 
     public get data() { return this._data as OsmWay; }
 
+    public get key() {
+        return `w:${this.id}`;
+    }
+
     public get parents(): Relation[] {
         return Element.parentIds.get(this.id)?.map(pid => get('relation', pid)!) ?? [];
     }
@@ -212,6 +222,10 @@ export class Node extends Element {
     }
 
     public get data() { return this._data as OsmNode; }
+
+    public get key() {
+        return `n:${this.id}`;
+    }
 
     public get parents(): Way[] {
         return Element.parentIds.get(this.id)!.map(pid => get('way', pid)!) ?? [];
