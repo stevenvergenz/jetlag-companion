@@ -1,6 +1,6 @@
 import { ReactNode, useContext, useEffect, useState } from 'react';
 
-import { Id, pack } from './id';
+import { Id, pack, unpack } from './id';
 import { getAsync } from './overpass_api';
 import { Relation, Way, WayGroup } from './osm_element';
 import { TreeNode } from './tree_node';
@@ -85,7 +85,7 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
                 <input type='checkbox' checked={enabled()} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
                 {relation.name} (
-                <a target='_blank' href={`https://www.openstreetmap.org/relation/${relation.id}`}>{relation.id}</a>
+                <a target='_blank' href={`https://www.openstreetmap.org/relation/${unpack(relation.id).id}`}>{relation.id}</a>
                 )
             </label>;
         } else {
@@ -203,7 +203,7 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
                     checked={enabled} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
                 {way.name} (
-                <a target='_blank' href={`https://www.openstreetmap.org/relation/${way.id}`}>{way.id}</a>
+                <a target='_blank' href={`https://www.openstreetmap.org/way/${unpack(way.id).id}`}>{way.id}</a>
                 )
             </label>;
         } else {

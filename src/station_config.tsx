@@ -15,7 +15,11 @@ const StationStyle: PathOptions = {
 
 export function StationConfig(): ReactNode {
     const {
-        stations: { show, setShow, useTransitStations, setUseTransitStations },
+        stations: {
+            show, setShow,
+            useTransitStations, setUseTransitStations,
+            busTransferThreshold: busStopThreshold, setBusTransferThreshold: setBusStopThreshold,
+        },
     } = useContext(Context);
 
     return <TreeNode id='stations' initiallyOpen={true}>
@@ -25,13 +29,16 @@ export function StationConfig(): ReactNode {
         </label>
         <TreeNode id='station-settings' initiallyOpen={true}>
             <span className='font-bold'>Settings</span>
-            <TreeNode id='station-rail' initiallyOpen={true}>
-                <label>
-                    <input type='checkbox'
-                        checked={useTransitStations} onChange={e => setUseTransitStations(e.target.checked)} />
-                    &nbsp; Transit stations
-                </label>
-            </TreeNode>
+            <label>
+                <input type='checkbox'
+                    checked={useTransitStations} onChange={e => setUseTransitStations(e.target.checked)} />
+                &nbsp; Transit stations
+            </label>
+            <label>
+                <input type='number' min='0' max='5'
+                    value={busStopThreshold} onChange={e => setBusStopThreshold(e.target.valueAsNumber)}/>
+                &nbsp; Bus transfers
+            </label>
         </TreeNode>
     </TreeNode>;
 }
@@ -39,18 +46,32 @@ export function StationConfig(): ReactNode {
 export function StationMarkers(): ReactNode {
     const {
         boundary: { editing, path },
-        stations: { show, useTransitStations },
+        stations: { show, useTransitStations, busTransferThreshold },
     } = useContext(Context);
     const [ stations, setStations ] = useState([] as Node[]);
 
     useEffect(() => {
         async function helper() {
             if (!path || path.length < 2) { return; }
-            const res = await requestStations(path, useTransitStations, 1);
+            const res = await requestStations(path, useTransitStations, busTransferThreshold);
             setStations(res);
         }
         helper();
-    }, [path, useTransitStations]);
+    }, [path, useTransitStations, busTransferThreshold]);
+
+    function modeString(n: Node): string {
+        const modes = [];
+        if (n.isStation) {
+            modes.push('Station');
+        }
+        if (n.isRail) {
+            modes.push('Rail');
+        }
+        if (n.isBusStop) {
+            modes.push('Bus');
+        }
+        return modes.join(', ');
+    }
 
     if (path && !editing && show) {
         return <LayerGroup>
@@ -58,10 +79,7 @@ export function StationMarkers(): ReactNode {
                 <CircleMarker key={n.id} center={[n.lat, n.lon]} radius={5} pathOptions={StationStyle}>
                     <Tooltip>
                         <p className='font-bold'>{n.name}</p>
-                        <span>{[
-                            n.isStation ? 'Station' : '',
-                            n.isRail ? 'Rail' : '',
-                        ].join(', ')}
+                        <span>{modeString(n)}
                         </span>
                     </Tooltip>
                 </CircleMarker>

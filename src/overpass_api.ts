@@ -148,39 +148,48 @@ export function get(id: Id): Element | undefined {
     }
 }
 
+const stationCache = new Map<string, Id[]>();
+
 export async function requestStations(
     poly: LatLngTuple[], 
     useTransitStations: boolean, 
-    busStopThreshold: number,
+    busTransferThreshold: number,
 ): Promise<Node[]> {
-    const polyStr = poly.flat().join(' ');
-    const stationQuery = `
-        node.all[public_transport=station] -> .stations;
-        (
+    const polyStr = poly.flat().map(n => n?.toPrecision(6)).join(' ');
+    let ids: Id[] = [];
+    if (!stationCache.has(polyStr)) {
+        const stationQuery = `
+            node.all[public_transport=station] -> .stations;
+            (
+                .result;
+                .stations;
+            ) -> .result;
+        `;
+        const busQuery = `
+            node.all[highway='bus_stop'] -> .stops;
+            relation.stops(bn)[type='route'][route='bus'] -> .variants;
+            relation.variants(br)[type='route_master'][route_master='bus'] -> .routes;
+            (
+                .result;
+                .stops;
+                .variants;
+                .routes;
+            ) -> .result;`
+        const q = `
+            node(poly:"${polyStr}") -> .all;
+            ${useTransitStations ? stationQuery : ''}
+            ${busTransferThreshold > 0 ? busQuery : ''}
             .result;
-            .stations;
-        ) -> .result;
-    `;
-    const busQuery = `
-        node.all[highway='bus_stop'] -> .stops;
-        relation.stops(bn)[type='route'][route='bus'] -> .variants;
-        relation.variants(br)[type='route_master'][route_master='bus'] -> .routes;
-        (
-            .result;
-            .stops;
-            .variants;
-            .routes;
-        ) -> .result;`
-    const q = `
-        node(poly:"${polyStr}") -> .all;
-        ${useTransitStations ? stationQuery : ''}
-        ${busStopThreshold > 0 ? busQuery : ''}
-        .result;
-    `;
-    const ids = await query(q);
+        `;
+        ids = (await query(q)).filter(id => unpack(id).type === 'node');
+        stationCache.set(polyStr, ids);
+    }
+    else {
+        ids = stationCache.get(polyStr)!;
+    }
+
     const nodes = ids
         .map(id => get(id) as Node)
-        .filter(e => e.data.type === 'node')
-        .filter(n => !n.isBusStop || n.busRoutes.length >= busStopThreshold);
+        .filter(n => !n.isBusStop || n.busRoutes.length >= busTransferThreshold);
     return nodes;
 }
