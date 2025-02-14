@@ -301,7 +301,12 @@ async function generateBoundaryLoopPath(
 
 export function BoundaryLoop(): ReactNode {
     const map = useMap();
-    const { editingBoundary, boundaryReady, included, excluded } = useContext(Context);
+    const {
+        editingBoundary,
+        boundaryReady,
+        setBoundary,
+        included, excluded,
+    } = useContext(Context);
     const [path, setPath] = useState([] as LatLngExpression[][]);
 
     useEffect(() => {
@@ -316,6 +321,8 @@ export function BoundaryLoop(): ReactNode {
                 console.log(`Boundary path closed with ${p.length} points`);
             }
 
+            setBoundary(p);
+
             const innerBounds = new LatLngBounds(p);
             const outerBounds = innerBounds.pad(2);
             setPath([
@@ -328,7 +335,7 @@ export function BoundaryLoop(): ReactNode {
             map.fitBounds(innerBounds, { padding: [0, 0] });
         }
         helper();
-    }, [included, excluded, map, boundaryReady]);
+    }, [included, excluded, map, boundaryReady, setBoundary]);
 
     if (!editingBoundary && boundaryReady) {
         return <LayerGroup>

@@ -49,7 +49,7 @@ export function BoundaryLayer(): ReactNode {
             }
         }
         recalcBounds();
-    }, [included, excluded, map, boundaryReady]);
+    }, [included, excluded, map, boundaryReady, editingBoundary]);
 
     if (editingBoundary && boundaryReady) {
         return <LayerGroup>

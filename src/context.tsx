@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useEffect, useState } from 'react';
-import { getAsync } from './overpass_api';
+import { LatLngTuple } from 'leaflet';
+import {  getAsync } from './overpass_api';
 
 type Content = {
     included: number[],
@@ -11,6 +12,8 @@ type Content = {
     setEditingBoundary: (b: boolean) => void,
     boundaryReady: boolean,
     setBoundaryReady: (b: boolean) => void,
+    boundary: LatLngTuple[],
+    setBoundary: (b: LatLngTuple[]) => void,
 
     hovering: number,
     setHovering: (n: number) => void,
@@ -28,6 +31,8 @@ const dummyContent: Content = {
     setEditingBoundary: () => {},
     boundaryReady: false,
     setBoundaryReady: () => {},
+    boundary: [],
+    setBoundary: () => {},
 
     hovering: 0,
     setHovering: () => {},
@@ -44,6 +49,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         JSON.parse(window.localStorage.getItem('boundary_excluded') ?? '[]') as number[]);
     const [editingBoundary, setEditingBoundary] = useState(false);
     const [boundaryReady, setBoundaryReady] = useState(false);
+    const [boundary, setBoundary] = useState([] as LatLngTuple[]);
     const [hovering, setHovering] = useState(0);
 
     useEffect(() => {
@@ -92,6 +98,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         excluded, setExcluded,
         editingBoundary, setEditingBoundary,
         boundaryReady, setBoundaryReady,
+        boundary, setBoundary,
         hovering, setHovering,
         save, };
     return <Context.Provider value={values}>
