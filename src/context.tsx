@@ -1,7 +1,7 @@
 import { createContext, ReactNode, useEffect, useState } from 'react';
 import { LatLngTuple } from 'leaflet';
 
-import { getAsync } from './overpass_api';
+import { fetchAsync } from './overpass_api';
 import { Id, pack } from './id';
 import { Element, Relation, Way } from './osm_element';
 import { load, save } from './config';
@@ -103,7 +103,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         async function helper() {
-            const relations = (await getAsync([...included].filter(context.boundary.notExcluded))) as Relation[];
+            const relations = (await fetchAsync([...included].filter(context.boundary.notExcluded))) as Relation[];
 
             const wayIds = relations
                 .flatMap(r => r.data.members)
@@ -111,12 +111,12 @@ export function ContextProvider({ children }: { children: ReactNode }) {
                 .filter(id => id.type === 'way')
                 .map(id => pack(id))
                 .filter(context.boundary.notExcluded);
-            const ways = (await getAsync(wayIds)) as Way[];
+            const ways = (await fetchAsync(wayIds)) as Way[];
 
             const nodeIds = ways
                 .filter(context.boundary.notExcluded)
                 .flatMap(w => w.childIds);
-            await getAsync(nodeIds);
+            await fetchAsync(nodeIds);
         }
 
         helper();

@@ -1,7 +1,7 @@
 import { ReactNode, useContext, useEffect, useState } from 'react';
 
 import { Id, pack } from './id';
-import { getAsync } from './overpass_api';
+import { fetchAsync } from './overpass_api';
 import { Relation, Way, WayGroup } from './osm_element';
 import { TreeNode } from './tree_node';
 import { Context } from './context';
@@ -61,7 +61,7 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
 
     useEffect(() => {
         if (!relation || relation.id !== id) {
-            getAsync([id]).then(([r]) => setRelation(r as Relation));
+            fetchAsync([id]).then(([r]) => setRelation(r as Relation));
         }
     }, [id, relation]);
 
@@ -170,7 +170,7 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
 
     useEffect(() => {
         if (!way || way.id !== id) {
-            getAsync([id]).then(([w]) => setWay(w as Way));
+            fetchAsync([id]).then(([w]) => setWay(w as Way));
         }
     }, [id, way]);
 

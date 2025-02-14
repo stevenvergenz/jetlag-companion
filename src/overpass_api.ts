@@ -6,7 +6,8 @@ const endpoint = 'https://overpass-api.de/api/interpreter';
 
 export const cache = new Map<Id, Element>();
 
-const promises = new Map<Id, Promise<Element[]>>();
+const fetchPromises = new Map<Id, Promise<Element[]>>();
+const getPromiseResolves = new Map<Id, (e: Element) => void>();
 
 type OsmQueryResult = {
     version: string,
@@ -75,10 +76,10 @@ async function query(query: string): Promise<Element[]> {
     return body.elements.map(e => get(packFrom(e))!);
 }
 
-async function getAsyncInternal(ids: Id[]): Promise<Element[]> {
-    const promiseIds = ids.filter(id => promises.has(id));
+async function fetchAsyncInternal(ids: Id[]): Promise<Element[]> {
+    const promiseIds = ids.filter(id => fetchPromises.has(id));
     const queryIdParts = ids
-        .filter(id => !cache.has(id) && !promises.has(id))
+        .filter(id => !cache.has(id) && !fetchPromises.has(id))
         .map(id => unpack(id))
         .filter(iu => iu.type !== 'wayGroup');
     if (queryIdParts.length > 0) {
@@ -101,36 +102,43 @@ async function getAsyncInternal(ids: Id[]): Promise<Element[]> {
     }
 
     if (promiseIds.length > 0) {
-        await Promise.all(promiseIds.map(id => promises.get(id)).filter(p => p !== undefined));
+        await Promise.all(promiseIds.map(id => fetchPromises.get(id)).filter(p => p !== undefined));
     }
     
     return ids.map(id => get(id)!);
 }
 
-export function getAsync(ids: Id[]): Promise<Element[]> {
+export function fetchAsync(ids: Id[]): Promise<Element[]> {
     ids = ids.map(id => unreversed(id));
     const queryIds = ids.filter(id => !cache.has(id));
     if (queryIds.length > 0) {
-        const p = getAsyncInternal(queryIds)
+        const p = fetchAsyncInternal(queryIds)
             .finally(() => {
                 for (const id of queryIds) {
-                    promises.delete(id);
+                    fetchPromises.delete(id);
                 }
             });
 
         for (const id of queryIds) {
-            promises.set(id, p);
+            fetchPromises.set(id, p);
         }
     }
 
     return Promise.all(ids.map(async (id) => {
-        if (promises.has(id)) {
-            return (await promises.get(id)!).find(e => e.id === id)!;
+        if (fetchPromises.has(id)) {
+            return (await fetchPromises.get(id)!).find(e => e.id === id)!;
         }
         else {
             return get(id)!;
         }
     }));
+}
+
+export async function getAsync(id: Id): Promise<Element> {
+    if (getPromiseResolves.has(id)) {
+        await fetchPromises.get(id);
+    }
+    return get(id)!;
 }
 
 export function get(id: Id): Element | undefined {
@@ -144,7 +152,7 @@ export function get(id: Id): Element | undefined {
     }
 }
 
-export async function getStations(poly: LatLngTuple[], useTransitStations: boolean): Promise<Node[]> {
+export async function fetchStations(poly: LatLngTuple[], useTransitStations: boolean): Promise<Node[]> {
     const polyStr = poly.flat().join(' ');
     const q = `
         node(poly:"${polyStr}")->.a;
