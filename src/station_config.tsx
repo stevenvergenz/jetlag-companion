@@ -7,6 +7,13 @@ import { Context } from './context';
 import { getByTransportTypeAsync } from './overpass_cache';
 import { Element, Relation, Way, Node } from './element';
 
+type Station = {
+    stopArea?: Relation,
+    station?: Way | Node,
+    platforms: (Way | Node)[],
+    routes: Relation[],
+};
+
 const StationStyle: PathOptions = {
     color: '#3388ff',
     weight: 2,
@@ -60,6 +67,9 @@ export function StationMarkers(): ReactNode {
                 { request: true },
             );
 
+            const nodes = platforms.filter(p => p instanceof Node) as Node[];
+            const ways = platforms.filter(p => p instanceof Way) as Way[];
+            console.log(`Found ${platforms.length} platforms (${nodes.length} nodes, ${ways.length} ways)`);
             setStations(platforms);
         }
         helper();
@@ -92,7 +102,7 @@ export function StationMarkers(): ReactNode {
         return modes.join(', ');
     }
 
-    function renderStation(stopArea: Relation): ReactNode {
+    function renderStation(stopArea: Element): ReactNode {
         const marker = stopArea.children.find(c => c.data.tags?.public_transport === 'station')
             ?? stopArea.children.find(c => c.data.tags?.public_transport === 'platform');
 
