@@ -7,6 +7,7 @@ import { TopBar } from './top_bar';
 import { ContextProvider } from './context';
 import { SideBar } from './side_bar';
 import { BoundaryLayer } from './boundary_path';
+import { BoundaryLoop } from './boundary_loop';
 
 export default function App(): ReactNode {
   return <div className='w-full h-full flex flex-col'>
@@ -20,6 +21,7 @@ export default function App(): ReactNode {
         >
           <TileLayer url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'></TileLayer>
           <BoundaryLayer />
+          <BoundaryLoop />
         </MapContainer>
       </ContextProvider>
     </div>

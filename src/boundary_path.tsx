@@ -1,11 +1,10 @@
-import { ReactNode, useState, useEffect, useContext, useRef } from 'react';
+import { ReactNode, useState, useEffect, useContext } from 'react';
+import { LatLngTuple, LatLngBounds, PathOptions } from 'leaflet';
+import { LayerGroup, Polyline, useMap } from 'react-leaflet';
 
 import { get, getAsync } from './overpass_api';
 import { Relation, Way } from './osm_element';
 import { Context } from './context';
-import { LatLngTuple, LatLngBounds, PathOptions,
-    FeatureGroup as FeatureGroupType } from 'leaflet';
-import { FeatureGroup, Polyline, useMap } from 'react-leaflet';
 
 const EnabledStyle: PathOptions = {
     stroke: true,
@@ -26,11 +25,10 @@ const DisabledStyle: PathOptions = {
 export function BoundaryLayer(): ReactNode {
     const { included, excluded } = useContext(Context);
     const map = useMap();
-    const layerRef = useRef(null as FeatureGroupType | null);
 
     useEffect(() => {
         async function recalcBounds() {
-            if (!map || !layerRef.current) { return; }
+            if (!map) { return; }
             
             console.log('Updating bounds');
     
@@ -57,13 +55,11 @@ export function BoundaryLayer(): ReactNode {
             }
         }
         recalcBounds();
-    }, [included, excluded, map, layerRef]);
+    }, [included, excluded, map]);
 
-    
-
-    return <FeatureGroup ref={layerRef} interactive={false}>
+    return <LayerGroup>
         {included.map(id => <RelationPath key={`rp${id}`} id={id} />)}
-    </FeatureGroup>;
+    </LayerGroup>;
 }
 
 type RelationPathProps = {

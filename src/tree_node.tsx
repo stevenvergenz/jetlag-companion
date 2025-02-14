@@ -6,13 +6,17 @@ type Props = {
     initiallyOpen: boolean,
     onMouseEnter?: MouseEventHandler,
     onMouseLeave?: MouseEventHandler,
+    onToggle?: (open: boolean) => void,
 }
 
-export function TreeNode({ id, children, initiallyOpen, onMouseEnter, onMouseLeave }: Props): JSX.Element {
+export function TreeNode({ id, children, initiallyOpen, onMouseEnter, onMouseLeave, onToggle }: Props): JSX.Element {
     const [open, setOpen] = useState(initiallyOpen);
     const [hover, setHover] = useState(false);
     function toggle() {
         setOpen(!open);
+        if (onToggle) {
+            onToggle(!open);
+        }
     }
 
     function mouseEnter(e: MouseEvent<Element>) {
