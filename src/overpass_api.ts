@@ -113,6 +113,9 @@ export async function requestAsync(ids: Id[]): Promise<Element[]> {
     const ret = [] as Element[];
     for (const id of ids) {
         const e = items.find(e => e.id === id)!;
+        if (!e) {
+            console.log('Missing element:', id);
+        }
         items = items.filter(e => e.id !== id);
         ret.push(e);
     }

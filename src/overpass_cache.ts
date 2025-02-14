@@ -14,9 +14,14 @@ type TransportDbItem = {
 
 const memCacheId = new Map<Id, Element>();
 const memCacheTransport = new Map<string, Id[]>();
-let memCacheTransportBounds = [] as LatLngTuple[];
+let memCacheTransportBounds = [] as CleanLatLng[];
 const getPromises = new Map<Id, Promise<Element[]>>();
 const getCallbacks = new Map<Id, (e: Element[]) => void>();
+
+function boundsEq(a: CleanLatLng[], b: CleanLatLng[]): boolean {
+    return a.length === b.length && a.every((ai, i) =>
+        ai.every((aij, j) => aij === b[i][j]))
+}
 
 function dbReq<T>(req: IDBRequest<T>): Promise<T> {
     return new Promise((resolve, reject) => {
@@ -40,7 +45,7 @@ async function dbInit(): Promise<IDBDatabase> {
     return _db!;
 }
 
-async function dbPut(es: Element[], bounds?: LatLngTuple[]): Promise<void> {
+async function dbPut(es: Element[], bounds?: CleanLatLng[]): Promise<void> {
     const db = await dbInit();
     const tx = db.transaction(['elements', 'transport'], 'readwrite');
     const eStore = tx.objectStore('elements');
@@ -59,9 +64,7 @@ async function dbPut(es: Element[], bounds?: LatLngTuple[]): Promise<void> {
                 e.data.tags.public_transport 
                 || ['route', 'route_master'].includes(e.data.tags.type)
             )) {
-                if (memCacheTransportBounds.length !== cleanBounds.length
-                    || !memCacheTransportBounds.every((b, i) => b === cleanBounds[i])
-                ) {
+                if (!boundsEq(memCacheTransportBounds, cleanBounds)) {
                     memCacheTransportBounds = cleanBounds;
                     memCacheTransport.clear();
                 }
@@ -115,7 +118,7 @@ async function dbGetById(ids: Id[], tx?: IDBTransaction): Promise<Element[]> {
     return ids.map(id => memCacheId.get(id)).filter(e => e !== undefined) as Element[];
 }
 
-async function dbGetByTransportType(bounds: LatLngTuple[], transportType: string): Promise<Element[]> {
+async function dbGetByTransportType(bounds: CleanLatLng[], transportType: string): Promise<Element[]> {
     const db = await dbInit();
     const tx = db.transaction(['transport', 'elements'], 'readonly');
     const tStore = tx.objectStore('transport');
@@ -123,10 +126,7 @@ async function dbGetByTransportType(bounds: LatLngTuple[], transportType: string
     bounds = bounds?.map(b => [b[0], b[1]]);
 
     let ids = [] as Id[];
-    if (memCacheTransportBounds.length === bounds.length
-        && memCacheTransportBounds.every((b, i) => b === bounds[i])
-        && memCacheTransport.has(transportType)
-    ) {
+    if (boundsEq(memCacheTransportBounds, bounds) && memCacheTransport.has(transportType)) {
         ids = memCacheTransport.get(transportType)!;
     }
     else {
@@ -208,12 +208,13 @@ export async function getByTransportTypeAsync(
     transportType: string, 
     { request } = { request: false },
 ): Promise<Element[]> {
-    const localEs = await dbGetByTransportType(bounds, transportType);
+    const cleanBounds = bounds.map(b => b.slice(0, 2) as CleanLatLng);
+    const localEs = await dbGetByTransportType(cleanBounds, transportType);
     if (!request || localEs.length > 0) {
         return localEs;
     }
 
     const reqEs = await requestTransport(bounds);
-    await dbPut(reqEs, bounds);
+    await dbPut(reqEs, cleanBounds);
     return reqEs;
 }

@@ -50,7 +50,7 @@ export function StationMarkers(): ReactNode {
     } = useContext(Context);
     const [ stations, setStations ] = useState([] as Relation[]);
 
-    useEffect(() => {
+    /*useEffect(() => {
         async function helper() {
             if (!path || path.length < 2) { return; }
 
@@ -63,7 +63,7 @@ export function StationMarkers(): ReactNode {
             setStations(res);
         }
         helper();
-    }, [path, useTransitStations, busTransferThreshold]);
+    }, [path, useTransitStations, busTransferThreshold]);*/
 
     function modeString(stopArea: Relation): string {
         const modes = [];

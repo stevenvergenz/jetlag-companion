@@ -128,7 +128,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
         helper();
 
-    }, [context.boundary, included, excluded]);
+    }, [context.boundary.notExcluded, included, excluded]);
 
     return <Context.Provider value={context}>
         {children}
