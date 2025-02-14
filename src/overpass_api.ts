@@ -141,7 +141,7 @@ export function get(id: Id): Element | undefined {
     const idu = unpack(id);
     if (idu.type === 'wayGroup') {
         const parentId = pack({ type: 'relation', id: idu.id });
-        return (get(parentId) as Relation | undefined)?.wayGroups.get(id);
+        return (get(parentId) as Relation | undefined)?.wayGroups?.get(id);
     }
     else {
         return cache.get(unreversed(id));
@@ -154,7 +154,7 @@ export async function requestStations(
     poly: LatLngTuple[], 
     useTransitStations: boolean, 
     busTransferThreshold: number,
-): Promise<Node[]> {
+): Promise<Relation[]> {
     const polyStr = poly.flat().map(n => n?.toPrecision(6)).join(' ');
     
     let ids: Id[] = [];
@@ -188,16 +188,48 @@ export async function requestStations(
                 .route_masters;
             );
         `;
-        ids = (await query(q)).filter(id => unpack(id).type === 'node');
+        ids = await query(q);
         stationCache.set(polyStr, ids);
     }
     else {
         ids = stationCache.get(polyStr)!;
     }
 
-    const nodes = ids
-        .map(id => get(id) as Node);
-    return nodes.filter(n =>
-            useTransitStations && n.isStation
-            || n.isBusStop && n.busRoutes.length >= busTransferThreshold);
+    const stopAreas = ids.map(id => get(id))
+        .filter(e => e instanceof Relation && e.data.tags?.public_transport === 'stop_area') as Relation[];
+    const ret = new Set<Id>();
+
+    for (const sa of stopAreas) {
+        const stations = sa.children
+            .filter(e => e.data.tags?.public_transport === 'station');
+        const adjacentStopAreas: Relation[] =
+            stations.length === 0 ?
+            [sa] :
+            stations
+                .flatMap(s => s.parents)
+                .filter(p => p instanceof Relation && p.data.tags?.public_transport === 'stop_area') as Relation[];
+
+        if (adjacentStopAreas.some(a => ret.has(a.id))) {
+            continue;
+        }
+
+        const routeMasters = adjacentStopAreas
+            .flatMap(a => a.children)
+            .filter(e => e.data.tags?.public_transport === 'platform')
+            .flatMap(p => p.parents)
+            .filter(e => e.data.tags?.type === 'route')
+            .flatMap(r => r.parents)
+            .filter((r, i, arr) => {
+                return r.data.tags?.type === 'route_master' 
+                    && arr.slice(i + 1).findIndex(e => e.id === r.id) === -1;
+            }) as Relation[];
+
+        if (routeMasters.length < busTransferThreshold) {
+            continue;
+        }
+
+        ret.add(sa.id);
+    }
+
+    return [...ret].map(id => get(id) as Relation);
 }

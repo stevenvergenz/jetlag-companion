@@ -78,8 +78,16 @@ export async function generateBoundaryLoopPath(
         .filter(id => !excluded.has(id))
     );
     console.log('boundary ways loaded');
+
     await getAsync(...ws.flatMap(w => w.childIds));
     console.log('boundary nodes loaded');
+
+    for (const r of rs) {
+        r.calcWayGroups();
+        console.log(r.wayGroups);
+        console.log(r.childIds);
+    }
+    console.log('way groups calculated');
 
     return mergeRelations(rs, excluded, distanceFn);
 }
@@ -209,7 +217,7 @@ export function calcIntersection(seg1: PathSegment, seg2: PathSegment): LatLngTu
 
 export function calcRelationPath(relation: Relation, excluded: Set<Id>, distanceFn: DistanceFn): LatLngTuple[] {
     const wgs = relation.children
-        .filter(e => e.data.type === 'wayGroup' && !excluded.has(e.id)) as WayGroup[];
+        .filter(e => e instanceof WayGroup && !excluded.has(e.id)) as WayGroup[];
     const legs = wgs
         .map(wg => {
             const path = calcWayGroupPath(wg, excluded);
@@ -234,6 +242,7 @@ export function calcRelationPath(relation: Relation, excluded: Set<Id>, distance
             map.set(leg.id, leg);
             return map;
         }, new Map<Id, WayLeg>());
+    console.log(`Relation ${relation.id} has ${legs.size} legs`);
 
     // compare each end of each way group to every other end and match them by distance and orientation
 

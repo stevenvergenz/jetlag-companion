@@ -11,6 +11,8 @@ export class HierarchyHelper {
     }
 
     public static setInterest(childId: Id, parent: Element) {
+        parent.addChildUnique(childId);
+
         if (this.knownIds.has(childId)) {
             this.fulfillInterest(get(childId)!, parent);
         }
@@ -32,17 +34,10 @@ export class HierarchyHelper {
     }
 
     private static fulfillInterest(child: Element, parent: Element) {
-        if (child instanceof Way && parent instanceof Relation) {
-            this.fulfillInterestRelationWay(child, parent);
-        }
-        else {
-            child.parentIds.add(parent.id);
-        }
+        child.parentIds.add(parent.id);
     }
 
-    private static fulfillInterestRelationWay(child: Way, parent: Relation) {
-        parent.wayGroups ??= new Map();
-
+    public static fulfillInterestRelationWay(child: Way, parent: Relation) {
         /** All roles for the fulfilled way */
         const roles = new Set(parent.data.members
             .filter(m => pack({ type: m.type, id: m.ref }) === child.id)
@@ -51,21 +46,17 @@ export class HierarchyHelper {
             return;
         }
 
-        if (!parent.wayGroups) {
-            console.error(parent);
-        }
-
         const wayEnds = [child.childIds[0], child.childIds[child.childIds.length - 1]];
 
         for (const role of roles) {
             /** The list of known way groups that successfully added the fulfilled way */
-            const added = [...parent.wayGroups.values()]
+            const added = [...parent.wayGroups!.values()]
                 .filter(e => e.role === role && e.add(child));
 
             // no existing way group will take it, add a new one
             if (added.length === 0) {
                 const wg = new WayGroup(parent.id, role, child);
-                parent.wayGroups.set(wg.id, wg);
+                parent.wayGroups!.set(wg.id, wg);
                 parent.addChildUnique(wg.id);
                 child.parentIds.add(wg.id);
                 continue;
@@ -118,7 +109,7 @@ export class HierarchyHelper {
                     continue;
                 }
 
-                parent.wayGroups.delete(junior.id);
+                parent.wayGroups!.delete(junior.id);
                 parent.childIds = parent.childIds.filter(id => id !== junior.id);
                 
                 for (const way of junior.children) {
@@ -178,7 +169,6 @@ export abstract class Element {
         }
         if (data.type === 'way') {
             for (const id of data.nodes.map(n => pack({ type: 'node', id: n }))) {
-                this.childIds.push(id);
                 HierarchyHelper.setInterest(id, this);
             }
         }
@@ -194,7 +184,7 @@ export abstract class Element {
 }
 
 export class Relation extends Element {
-    public wayGroups = new Map<Id, WayGroup>();
+    public wayGroups?: Map<Id, WayGroup>;
 
     public constructor(id: Id, data: OsmRelation) {
         super(id, data);
@@ -202,6 +192,17 @@ export class Relation extends Element {
 
     public get data() {
         return this._data as OsmRelation;
+    }
+
+    public calcWayGroups() {
+        if (this.wayGroups) {
+            return;
+        }
+
+        this.wayGroups = new Map();
+        for (const w of this.children.filter(e => e instanceof Way)) {
+            HierarchyHelper.fulfillInterestRelationWay(w, this);
+        }
     }
 }
 
@@ -310,24 +311,4 @@ export class Node extends Element {
 
     public get lat() { return this.data.lat; }
     public get lon() { return this.data.lon; }
-
-    public get isStation(): boolean {
-        return this.data.tags?.public_transport === 'station';
-    }
-    public get isRail(): boolean {
-        return this.data.tags?.railway !== undefined;
-    }
-    public get isBusStop(): boolean {
-        return this.data.tags?.highway === 'bus_stop';
-    }
-    public get busRoutes(): Relation[] {
-        return this.parents
-            .filter(e => e instanceof Relation && e.data.tags?.type === 'route') as Relation[];
-            // .flatMap(e => [...e.parentIds])
-            // .reduce((acc, id) => {
-            //     acc.add(id);
-            //     return acc;
-            // }, new Set<Id>());
-        //return [...ids].map(id => get(id) as Relation);
-    }
 }

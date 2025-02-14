@@ -109,7 +109,8 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         async function helper() {
-            const relations = (await requestAsync(...[...included].filter(context.boundary.notExcluded))) as Relation[];
+            const relIds = [...included].filter(context.boundary.notExcluded);
+            const relations = await requestAsync(...relIds) as Relation[];
 
             const wayIds = relations
                 .flatMap(r => r.data.members)

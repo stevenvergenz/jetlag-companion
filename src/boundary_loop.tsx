@@ -20,6 +20,7 @@ export function BoundaryLoop(): ReactNode {
     useEffect(() => {
         async function helper() {
             if (!map || editing || included.size === 0) { return; }
+            
             let p: LatLngTuple[] | undefined;
             try {
                 p = await generateBoundaryLoopPath(included, excluded, map.distance.bind(map));

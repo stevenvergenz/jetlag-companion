@@ -1,11 +1,11 @@
 import { ReactNode, useState, useEffect, useContext } from 'react';
-import { CircleMarker, LayerGroup, Tooltip } from 'react-leaflet';
+import { CircleMarker, LayerGroup, Polygon, Tooltip } from 'react-leaflet';
 import { PathOptions } from 'leaflet';
 
 import { TreeNode } from './tree_node';
 import { Context } from './context';
 import { requestStations } from './overpass_api';
-import { Node } from './osm_element';
+import { Relation, Way, Node } from './osm_element';
 
 const StationStyle: PathOptions = {
     color: '#3388ff',
@@ -48,7 +48,7 @@ export function StationMarkers(): ReactNode {
         boundary: { editing, path },
         stations: { show, useTransitStations, busTransferThreshold },
     } = useContext(Context);
-    const [ stations, setStations ] = useState([] as Node[]);
+    const [ stations, setStations ] = useState([] as Relation[]);
 
     useEffect(() => {
         async function helper() {
@@ -59,30 +59,63 @@ export function StationMarkers(): ReactNode {
         helper();
     }, [path, useTransitStations, busTransferThreshold]);
 
-    function modeString(n: Node): string {
+    function modeString(stopArea: Relation): string {
         const modes = [];
-        if (n.isStation) {
+        const stations = stopArea.children.filter(c => c.data.tags?.public_transport === 'station');
+        if (stations.length > 0) {
             modes.push('Station');
+            const areas = stations
+                .flatMap(s => s.parents)
+                .filter(p => p instanceof Relation && p.data.tags?.public_transport === 'stop_area');
+            
+            if (areas.flatMap(a => a.children).some(c => c.data.tags?.railway !== undefined)) {
+                modes.push('Rail');
+            }
+            if (areas.flatMap(a => a.children).some(c => c.data.tags?.highway === 'bus_stop')) {
+                modes.push(`Bus`);
+            }
         }
-        if (n.isRail) {
-            modes.push('Rail');
-        }
-        if (n.isBusStop) {
-            modes.push(`Bus (${n.busRoutes.map(r => r.data.tags?.ref).join('/')})`);
+        else {
+            if (stopArea.children.some(c => c.data.tags?.railway !== undefined)) {
+                modes.push('Rail');
+            }
+            if (stopArea.children.some(c => c.data.tags?.highway === 'bus_stop')) {
+                modes.push(`Bus`);
+            }
         }
         return modes.join(', ');
     }
 
+    function renderStation(stopArea: Relation): ReactNode {
+        const marker = stopArea.children.find(c => c.data.tags?.public_transport === 'station')
+            ?? stopArea.children.find(c => c.data.tags?.public_transport === 'platform');
+
+        if (marker instanceof Node) {
+            return <CircleMarker key={marker.id}
+                center={[marker.lat, marker.lon]}
+                radius={5}
+                pathOptions={StationStyle}>
+                <Tooltip>
+                    <p className='font-bold'>{stopArea.name}</p>
+                    <p>{modeString(stopArea)}</p>
+                </Tooltip>
+            </CircleMarker>;
+        }
+        else if (marker instanceof Way) {
+            return <Polygon key={marker.id}
+                positions={marker.children.map(c => [c.lat, c.lon])}
+                pathOptions={StationStyle}>
+                <Tooltip>
+                    <p className='font-bold'>{stopArea.name}</p>
+                    <p>{modeString(stopArea)}</p>
+                </Tooltip>
+            </Polygon>;
+        }
+    }
+
     if (path && !editing && show) {
         return <LayerGroup>
-            {stations.map(n =>
-                <CircleMarker key={n.id} center={[n.lat, n.lon]} radius={5} pathOptions={StationStyle}>
-                    <Tooltip>
-                        <p className='font-bold'>{n.name}</p>
-                        <p>{modeString(n)}</p>
-                    </Tooltip>
-                </CircleMarker>
-            )}
+            {stations.map(s => renderStation(s))}
         </LayerGroup>;
     }
 }
