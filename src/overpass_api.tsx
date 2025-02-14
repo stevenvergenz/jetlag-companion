@@ -1,7 +1,6 @@
 import { Element, Node, Relation, Way } from './osm_element';
 
-const ENDPOINT = 'https://overpass-api.de/api/interpreter';
-const LOWER_US = '24.41,-125.51,49.61,-66.09';
+const endpoint = 'https://overpass-api.de/api/interpreter';
 
 const cache = new Map<number, Element>();
 const promises = new Map<number, Promise<Element>>();
@@ -45,7 +44,7 @@ export type OsmElement = OsmRelation | OsmWay | OsmNode;
 
 async function getAsyncInternal<T extends Element>(id: number): Promise<T> {
     if (!cache.has(id)) {
-        const res = await fetch(ENDPOINT, {
+        const res = await fetch(endpoint, {
             method: 'POST',
             body: `[out:json]; nwr(${id}); >>; out;`,
         });
