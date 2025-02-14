@@ -118,7 +118,7 @@ export function WayGroupConfig({ wayGroup }: WayGroupConfigProps): ReactNode {
     const [enabled, setEnabledLocal] = useState(true);
 
     useEffect(() => {
-        setInheritEnabled(wayGroup.parentIds.every(pid => !excluded.includes(pid)));
+        setInheritEnabled([...wayGroup.parentIds.values()].every(pid => !excluded.includes(pid)));
         setEnabledLocal(!excluded.includes(wayGroup.id));
     }, [wayGroup, excluded])
 

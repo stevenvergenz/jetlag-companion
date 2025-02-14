@@ -8,9 +8,9 @@ export abstract class Element {
     protected readonly _data?: OsmElement;
     public abstract get data(): OsmElement;
 
-    public parentIds = [] as Id[];
+    public parentIds = new Set<Id>();
     protected getParents() {
-        return this.parentIds
+        return [...this.parentIds]
             .map(id => get(id))
             .filter(e => e !== undefined);
     }
@@ -130,7 +130,7 @@ export class WayGroup extends GenericElement<Relation, Way> {
                 const wg = new WayGroup(relation.id, role, way);
                 relation.wayGroups.set(wg.id, wg);
                 relation.addChildUnique(wg.id);
-                way.parentIds.push(wg.id);
+                way.parentIds.add(wg.id);
                 continue;
             }
 
@@ -183,7 +183,11 @@ export class WayGroup extends GenericElement<Relation, Way> {
 
                 relation.wayGroups.delete(junior.id);
                 relation.childIds = relation.childIds.filter(id => id !== junior.id);
-                way.parentIds = way.parentIds.filter(id => id !== junior.id);
+                
+                way.parentIds.delete(junior.id);
+                if (way.id === 'w:909645217') {
+                    console.log(`Deleting way ${way.id} from way group ${junior.id}:`, way.parentIds);
+                }
             }
         }
     }
@@ -206,7 +210,7 @@ export class WayGroup extends GenericElement<Relation, Way> {
         const rid = unpack(relationId);
         super(pack({ type: 'wayGroup', id: rid.id, offset }), undefined);
 
-        this.parentIds.push(relationId);
+        this.parentIds.add(relationId);
         this.role = role;
         this.startsWithNode = '';
         this.endsWithNode = '';
@@ -225,30 +229,34 @@ export class WayGroup extends GenericElement<Relation, Way> {
             this.childIds.push(way.id);
             this.startsWithNode = firstNode;
             this.endsWithNode = lastNode;
-            way.parentIds.push(this.id);
+            way.parentIds.add(this.id);
         }
         else if (this.endsWithNode === firstNode) {
             this.childIds.push(way.id);
             this.endsWithNode = lastNode;
-            way.parentIds.push(this.id);
+            way.parentIds.add(this.id);
         }
         else if (this.startsWithNode === lastNode) {
             this.childIds.unshift(way.id);
             this.startsWithNode = firstNode;
-            way.parentIds.push(this.id);
+            way.parentIds.add(this.id);
         }
         else if (this.startsWithNode === firstNode) {
             this.childIds.unshift(reverse(way.id));
             this.startsWithNode = lastNode;
-            way.parentIds.push(this.id);
+            way.parentIds.add(this.id);
         }
         else if (this.endsWithNode === lastNode) {
             this.childIds.push(reverse(way.id));
             this.endsWithNode = firstNode;
-            way.parentIds.push(this.id);
+            way.parentIds.add(this.id);
         }
         else {
             return false;
+        }
+        
+        if (way.id === 'w:909645217') {
+            console.log(`Added way ${way.id} to way group ${this.id}:`, way.parentIds);
         }
         
         return true;
@@ -263,10 +271,14 @@ export class Way extends GenericElement<WayGroup, Node> {
             const nodeId = pack({ type: 'node', id: n });
             const node = get(nodeId);
             if (node) {
-                node.parentIds.push(this.id);
+                node.parentIds.add(this.id);
+            }
+            else if (Node.parentIds.has(nodeId)){
+                const parents = Node.parentIds.get(nodeId)!;
+                parents.add(this.id);
             }
             else {
-                Node.parentIds.set(nodeId, [...(Node.parentIds.get(nodeId) ?? []), this.id]);
+                Node.parentIds.set(nodeId, new Set([id]));
             }
             
             this.addChildUnique(nodeId);
@@ -279,11 +291,11 @@ export class Way extends GenericElement<WayGroup, Node> {
 }
 
 export class Node extends GenericElement<Way, Element> {
-    public static parentIds = new Map<Id, Id[]>();
+    public static parentIds = new Map<Id, Set<Id>>();
 
     public constructor(id: Id, data: OsmNode) {
         super(id, data);
-        this.parentIds = Node.parentIds.get(id) ?? [];
+        this.parentIds = Node.parentIds.get(id) ?? new Set();
         Node.parentIds.delete(id);
     }
 

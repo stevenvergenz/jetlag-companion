@@ -7,10 +7,14 @@ import { pack } from '../id';
 function setup() {
     cache.clear();
 
-    cache.set('n:1', new Node('n:1', { type: 'node', id: 1, lat: 0, lon: 0 }));
-    cache.set('n:2', new Node('n:2', { type: 'node', id: 2, lat: 0, lon: 0 }));
-    cache.set('n:3', new Node('n:3', { type: 'node', id: 3, lat: 0, lon: 0 }));
-    cache.set('n:4', new Node('n:4', { type: 'node', id: 4, lat: 0, lon: 0 }));
+    cache.set('n:1', new Node('n:1', { type: 'node', id: 1, lat:  1, lon: -1 }));
+    cache.set('n:2', new Node('n:2', { type: 'node', id: 2, lat:  1, lon:  0 }));
+    cache.set('n:3', new Node('n:3', { type: 'node', id: 3, lat:  1, lon:  1 }));
+    cache.set('n:4', new Node('n:4', { type: 'node', id: 4, lat:  0, lon:  1 }));
+    cache.set('n:5', new Node('n:5', { type: 'node', id: 5, lat: -1, lon:  1 }));
+    cache.set('n:6', new Node('n:6', { type: 'node', id: 6, lat: -1, lon:  0 }));
+    cache.set('n:7', new Node('n:7', { type: 'node', id: 7, lat: -1, lon: -1 }));
+    cache.set('n:8', new Node('n:8', { type: 'node', id: 8, lat:  0, lon: -1 }));
     
     cache.set('w:1', new Way('w:1', { type: 'way', id: 1, nodes: [1, 2] }));
     cache.set('w:2', new Way('w:2', { type: 'way', id: 2, nodes: [2, 3] }));
