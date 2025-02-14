@@ -7,11 +7,13 @@ import { onHover, onUnhover } from './hover_handler';
 
 type Props = {
     id: number,
+    inheritEnabled: boolean,
 };
 
-export function WayGroup({ id }: Props): JSX.Element {
+export function WayGroup({ id, inheritEnabled }: Props): JSX.Element {
     const map = useMap();
     const [way, setWay] = useState(undefined as OsmWay | undefined);
+    const [enabled, setEnabled] = useState(true);
 
     useEffect(() => {
         async function go() {
@@ -33,7 +35,8 @@ export function WayGroup({ id }: Props): JSX.Element {
     function genLabel() {
         if (way) {
             return <label>
-                <input type='checkbox' />
+                <input type='checkbox' disabled={!inheritEnabled}
+                    checked={enabled} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
                 {way.name} (wg:
                 <a target='_blank' href={`https://www.openstreetmap.org/relation/${way.id}`}>{way.id}</a>
@@ -48,6 +51,6 @@ export function WayGroup({ id }: Props): JSX.Element {
         onMouseEnter={onHover(map, way?.following.map(w => w.id))}
         onMouseLeave={onUnhover(map, way?.following.map(w => w.id))}>
         { genLabel() }
-        { way?.following.map(w => <Way key={w.id} id={w.id} />) }
+        { way?.following.map(w => <Way key={w.id} id={w.id} inheritEnabled={inheritEnabled && enabled} />) }
     </TreeNode>;
 }

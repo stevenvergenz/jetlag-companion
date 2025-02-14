@@ -6,11 +6,13 @@ import { onHover, onUnhover } from './hover_handler';
 
 type Props = {
     id: number,
+    inheritEnabled: boolean,
 };
 
-export function Way({ id }: Props): ReactNode{
+export function Way({ id, inheritEnabled }: Props): ReactNode{
     const map = useMap();
     const [way, setWay] = useState(undefined as OsmWay | undefined);
+    const [enabled, setEnabled] = useState(true);
     const [feature, setFeature] = useState(undefined as google.maps.Data.Feature | undefined);
 
     useEffect(() => {
@@ -28,10 +30,10 @@ export function Way({ id }: Props): ReactNode{
 
             let f = feature;
             if (!f) {
-                setFeature(f = map.data.add(new google.maps.Data.Feature({ id: w?.id })));
+                setFeature(f = map.data.add(new google.maps.Data.Feature({ id: w?.id, properties: { enabled } })));
             } else if (f.getId() !== id) {
                 map.data.remove(f);
-                setFeature(f = map.data.add(new google.maps.Data.Feature({ id: w?.id })));
+                setFeature(f = map.data.add(new google.maps.Data.Feature({ id: w?.id, properties: { enabled } })));
             }
 
             f.setGeometry(new google.maps.Data.LineString(
@@ -44,10 +46,16 @@ export function Way({ id }: Props): ReactNode{
         go();
     }, [id, map]);
 
+    useEffect(() => {
+        if (!feature) { return; }
+        feature.setProperty('enabled', inheritEnabled && enabled);
+    }, [inheritEnabled, enabled]);
+
     function genLabel() {
         if (way) {
             return <label>
-                <input type='checkbox' />
+                <input type='checkbox' disabled={!inheritEnabled}
+                    checked={enabled} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
                 {way.name} (w:
                 <a target='_blank' href={`https://www.openstreetmap.org/relation/${way.id}`}>{way.id}</a>

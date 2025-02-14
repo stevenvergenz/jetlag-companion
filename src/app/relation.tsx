@@ -12,6 +12,7 @@ type Props = {
 export function Relation({ id }: Props): JSX.Element {
     const map = useMap();
     const [relation, setRelation] = useState(undefined as OsmRelation | undefined);
+    const [enabled, setEnabled] = useState(true);
 
     useEffect(() => {
         getRelation(id).then(r => setRelation(r));
@@ -20,7 +21,7 @@ export function Relation({ id }: Props): JSX.Element {
     function genLabel() {
         if (relation) {
             return <label>
-                <input type='checkbox' />
+                <input type='checkbox' checked={enabled} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
                 {relation.name} (r:
                 <a target='_blank' href={`https://www.openstreetmap.org/relation/${relation.id}`}>{relation.id}</a>
@@ -35,6 +36,6 @@ export function Relation({ id }: Props): JSX.Element {
         onMouseEnter={onHover(map, relation?.ways.map(w => w.id))}
         onMouseLeave={onUnhover(map, relation?.ways.map(w => w.id))}>
         { genLabel() }
-        { relation?.wayGroups.map(w => <WayGroup key={'wg' + w.id} id={w.id} />) }
+        { relation?.wayGroups.map(w => <WayGroup key={'wg' + w.id} id={w.id} inheritEnabled={enabled} />) }
     </TreeNode>;
 }

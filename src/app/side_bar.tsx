@@ -15,11 +15,15 @@ export function SideBar(): JSX.Element {
                     strokeWeight: 10,
                     strokeColor: 'red',
                 };
-            } else {
+            } else if (feature.getProperty('enabled')) {
                 return {
                     strokeWeight: 2,
                     strokeColor: 'black',
                 };
+            } else {
+                return {
+                    visible: false,
+                }
             }
         });
     }, [map]);
