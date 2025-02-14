@@ -69,7 +69,6 @@ export async function generateBoundaryLoopPath(
     const ids = included.filter(id => !excluded.includes(id));
     const rs = await getAsync(ids);
     return mergeRelations(rs as Relation[], excluded, distanceFn);
-
 }
 
 export function mergeRelations(relations: Relation[], excluded: Id[], distanceFn: DistanceFn): LatLngTuple[] | undefined {
@@ -226,6 +225,7 @@ export function calcRelationPath(relation: Relation, excluded: Id[], distanceFn:
 
     // for each end of each way group
     const termini = [...legs.values()].map(l => Object.values(l.termini)).flat();
+    console.log(termini);
     for (const ref of termini) {
         if (ref.continuedBy) { continue; }
         
@@ -237,7 +237,7 @@ export function calcRelationPath(relation: Relation, excluded: Id[], distanceFn:
         } as EndpointMatch;
 
         // for each end of every other way group
-        for (const other of termini.filter(e => e.id !== unreversed(ref.id))) {
+        for (const other of termini.filter(e => unreversed(e.id) !== unreversed(ref.id))) {
             // distance in meters between endpoints (0 is perfect match)
             const dist = distanceFn(ref.pt, other.pt);
             // dot product of vectors of the ends (-1 is perfect match)
@@ -255,7 +255,8 @@ export function calcRelationPath(relation: Relation, excluded: Id[], distanceFn:
             }
         }
 
-        if (bestMatch.end && bestMatch.dist < MaxDistanceMeters && bestMatch.dot < MaxDot) {
+        if (bestMatch.end && bestMatch.dist <= MaxDistanceMeters && bestMatch.dot <= MaxDot) {
+            console.log('match found', bestMatch.end, ref);
             ref.continuedBy = bestMatch.end.id;
             bestMatch.end.continuedBy = ref.id;
         }
@@ -265,7 +266,6 @@ export function calcRelationPath(relation: Relation, excluded: Id[], distanceFn:
 
     // start with an end that does not continue
     let nextTerminusId = termini.find(e => !e.continuedBy)?.id;
-
     while (nextTerminusId) {
         // the terminus is at the start of a leg
         // so add leg nodes in order and continue with leg end terminus
