@@ -2,7 +2,7 @@ import Flatbush from 'flatbush';
 import { LatLngTuple } from 'leaflet';
 
 import { Id, reverse, isReversed, unreversed, packFrom } from './id';
-import { getAsync } from './overpass_api';
+import { getAsync } from './overpass_cache';
 import { Relation, WayGroup, Way } from './element';
 
 export const Vec2 = {
@@ -67,19 +67,19 @@ export async function generateBoundaryLoopPath(
     included: Set<Id>, excluded: Set<Id>, distanceFn: DistanceFn,
 ): Promise<LatLngTuple[] | undefined> {
     const rs = await getAsync(
-        ...[...included]
+        [...included]
         .filter(id => !excluded.has(id))
     ) as Relation[];
     console.log('boundary relations loaded');
     const ws = await getAsync(
-        ...rs.flatMap(r => r.data.members)
+        rs.flatMap(r => r.data.members)
         .filter(m => m.type === 'way')
         .map(m => packFrom(m))
         .filter(id => !excluded.has(id))
     );
     console.log('boundary ways loaded');
 
-    await getAsync(...ws.flatMap(w => w.childIds));
+    await getAsync(ws.flatMap(w => w.childIds));
     console.log('boundary nodes loaded');
 
     for (const r of rs) {

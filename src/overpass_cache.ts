@@ -2,7 +2,16 @@ import { Id, pack, unpack, unreversed } from './id';
 import { Element, Node, Relation, Way, WayGroup } from './element';
 import { OsmElement, requestAsync } from './overpass_api';
 
+type StationDbItem = {
+    bounds: string[],
+    transportType: string,
+    type: string,
+    id: number,
+};
+
 const memCacheId = new Map<Id, Element>();
+const getPromises = new Map<Id, Promise<Element[]>>();
+const getCallbacks = new Map<Id, (e: Element[]) => void>();
 
 function dbReq<T>(req: IDBRequest<T>): Promise<T> {
     return new Promise((resolve, reject) => {
@@ -17,9 +26,8 @@ async function dbInit(): Promise<IDBDatabase> {
         const req = indexedDB.open('overpass-cache', 1);
 
         req.addEventListener('upgradeneeded', () => {
-            const os = req.result.createObjectStore('elements');
-            os.createIndex('id', ['type', 'id'], { unique: true });
-            os.createIndex('transport_type', 'tags.public_transport', { unique: false });
+            req.result.createObjectStore('elements', { keyPath: ['type', 'id'] });
+            req.result.createObjectStore('transport', { keyPath: ['bounds', 'transportType'] });
         });
 
         _db = await dbReq(req);
@@ -38,6 +46,9 @@ async function dbPut(es: Element[]): Promise<void> {
                 memCacheId.set(e.id, e);
                 await dbReq(store.put(e.data));
             }
+
+            getCallbacks.get(e.id)?.([e]);
+            getCallbacks.delete(e.id);
         })
     );
 }
@@ -102,38 +113,59 @@ async function dbGetByTransportType(transportType: string): Promise<Element[]> {
     return [...memCacheId.values()].filter(e => e.data.tags?.public_transport === transportType);
 }
 
-const getPromises = new Map<Id, Promise<Element[]>>();
-const getCallbacks = new Map<Id, (e: Element[]) => void>();
+function getDeferred(id: Id): Promise<Element[]> {
+    return new Promise((resolve) => {
+        getCallbacks.set(id, resolve);
+    });
+}
 
-export function getAsync(ids: Id[], request = false): Promise<Element[]> {
+async function getInternalAsync(ids: Id[], { request }: { request: boolean }): Promise<Element[]> {
+    const dbEs = await dbGetById(ids);
+    const results = dbEs.reduce((map, e) => {
+        map.set(e.id, e);
+        return map;
+    }, new Map<Id, Element>());
+
+    const requestIds = ids.filter(id => !results.has(id));
+    let reqEs: Element[];
+    if (request) {
+        const p = requestAsync(requestIds);
+        for (const id of requestIds) {
+            getPromises.set(id, p);
+        }
+        reqEs = await p;
+        await dbPut(reqEs);
+    }
+    else {
+        for (const id of requestIds) {
+            getPromises.set(id, getDeferred(id));
+        }
+        reqEs = (await Promise.all(requestIds.map(id => getPromises.get(id)!))).flat();
+    }
+
+    for (const e of reqEs) {
+        results.set(e.id, e);
+    }
+
+    return ids.map(id => results.get(id)!);
+}
+
+export async function getAsync(ids: Id[], options = { request: false }): Promise<Element[]> {
     ids = ids.map(unreversed);
     const lookupIds = ids.filter(id => !getPromises.has(id) && unpack(id).type !== 'wayGroup');
 
     if (lookupIds.length > 0) {
-        const p = dbGetById(lookupIds)
-            .then(es => {
-                const remaining = ids.filter(id => es.find(e => e.id === id) === undefined);
-
-            });
+        const p = getInternalAsync(lookupIds, options);
+        for (const id of lookupIds) {
+            getPromises.set(id, p);
+        }
     }
 
-    return Promise.all(ids.map(id => {
-        if (getPromises.has(id)) {
-            return getPromises.get(id)!;
-        }
-        else if (reqPromises.has(id)) {
-            const p = reqPromises.get(id)!.then(() => get(id)!);
-            getPromises.set(id, p);
-            return p;
-        }
-        else {
-            const p = new Promise<Element>((resolve) => {
-                getCallbacks.set(id, resolve);
-            });
-            getPromises.set(id, p);
-            return p;
-        }
-    }));
+    await Promise.all(
+        ids.filter(id => getPromises.has(id)).map(id => getPromises.get(id)!)
+    );
+
+    return ids.map(id => get(id)!);
 }
 
 export function get(id: Id): Element | undefined {
@@ -143,6 +175,10 @@ export function get(id: Id): Element | undefined {
         return (get(parentId) as Relation | undefined)?.wayGroups?.get(id);
     }
     else {
-        return cache.get(unreversed(id));
+        return memCacheId.get(unreversed(id));
     }
+}
+
+export async function getByTransportTypeAsync(transportType: string): Promise<Element[]> {
+    return dbGetByTransportType(transportType);
 }
