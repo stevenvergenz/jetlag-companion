@@ -2,9 +2,9 @@ import { ReactNode, useState, useEffect, useContext } from 'react';
 import { LatLngTuple, LatLngBounds, PathOptions } from 'leaflet';
 import { LayerGroup, Polyline, useMap } from 'react-leaflet';
 
-import { Id } from './id';
+import { Id, unreversed } from './id';
 import { getAsync } from './overpass_api';
-import { Relation, Way } from './osm_element';
+import { Relation, WayGroup, Way } from './osm_element';
 import { Context } from './context';
 
 const EnabledStyle: PathOptions = {
@@ -55,7 +55,7 @@ export function BoundaryLayer(): ReactNode {
 
     if (editingBoundary && boundaryReady) {
         return <LayerGroup>
-            {included.map(id => <RelationPath key={id} id={id} />)}
+            {included.filter(id => !excluded.includes(id)).map(id => <RelationPath key={id} id={id} />)}
         </LayerGroup>;
     }
 }
@@ -64,7 +64,7 @@ type RelationPathProps = {
     id: Id,
 };
 export function RelationPath({ id }: RelationPathProps): ReactNode {
-    const { excluded } = useContext(Context);
+    const { excluded, boundaryReady } = useContext(Context);
     const [relation, setRelation] = useState(undefined as Relation | undefined);
 
     useEffect(() => {
@@ -73,11 +73,24 @@ export function RelationPath({ id }: RelationPathProps): ReactNode {
         }
     }, [id, relation]);
 
-    return <>
-        { relation
-            && !excluded.includes(relation.id) 
-            && relation.children.map(w => <WayPath key={w.id} id={w.id} />) }
-    </>;
+    if (boundaryReady) {
+        return relation?.children
+            .filter(wg => !excluded.includes(wg.id))
+            .map(wg => <WayGroupPath key={wg.id} wayGroup={wg} />);
+    }
+}
+
+type WayGroupPathProps = {
+    wayGroup: WayGroup,
+};
+export function WayGroupPath({ wayGroup }: WayGroupPathProps): ReactNode {
+    const { excluded, boundaryReady } = useContext(Context);
+
+    if (boundaryReady) {
+        return wayGroup.children
+            .filter(w => !excluded.includes(unreversed(w.id)))
+            .map(n => <WayPath key={n.id} id={unreversed(n.id)} />);
+    }
 }
 
 type WayPathProps = {
@@ -89,6 +102,7 @@ export function WayPath({ id }: WayPathProps): ReactNode {
         excluded, hovering,
     } = useContext(Context);
     const [way, setWay] = useState(undefined as Way | undefined);
+    const [renderOptions, setRenderOptions] = useState(DisabledStyle as PathOptions);
 
     useEffect(() => {
         if (boundaryReady && (!way || way.id !== id)) {
@@ -96,27 +110,32 @@ export function WayPath({ id }: WayPathProps): ReactNode {
         }
     }, [id, way, boundaryReady]);
 
-    function computeStyle() {
+    useEffect(() => {
         if (!way) {
-            return DisabledStyle;
+            setRenderOptions(DisabledStyle);
+            return;
+        }
+
+        if (way.id === 'w:909645217') {
+            console.log(way);
         }
 
         const relevantIds = [way.id, ...way.parentIds, ...way.parents.flatMap(wg => wg.parentIds)];
         if (relevantIds.includes(hovering)) {
-            return HoveredStyle;
+            setRenderOptions(HoveredStyle);
         }
         else if (relevantIds.some((id) => excluded.includes(id))) {
-            return DisabledStyle;
+            setRenderOptions(DisabledStyle);
         }
         else {
-            return EnabledStyle;
+            setRenderOptions(EnabledStyle);
         }
-    }
+    }, [way, hovering]);
     
     if (boundaryReady && way) {
         return <Polyline
             positions={way.children.map(n => [n.lat, n.lon] as LatLngTuple) ?? []}
-            pathOptions={computeStyle()}
+            pathOptions={renderOptions}
         />;
     }
 }

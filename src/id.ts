@@ -38,7 +38,7 @@ export function unpack(id: Id): IdUnpacked {
 }
 
 export function pack(obj: IdUnpacked): Id {
-    if (obj.offset) {
+    if (obj.offset !== undefined) {
         return `${obj.reverse ? '-' : ''}${typePrefixReverseMap.get(obj.type)}:${obj.id}/${obj.offset}`;
     }
     else {

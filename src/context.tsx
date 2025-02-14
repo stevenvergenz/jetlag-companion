@@ -46,9 +46,13 @@ export const Context = createContext(dummyContent as Content);
 
 export function ContextProvider({ children }: { children: ReactNode }) {
     const [included, setIncluded] = useState(
-        JSON.parse(window.localStorage.getItem('boundary_included') ?? '[]') as Id[]);
+        JSON.parse(window.localStorage.getItem('boundary_included') ?? '[]')
+        .map((id: any) => typeof(id) === 'number' ? pack({ type: 'relation', id }) : id) as Id[],
+    );
     const [excluded, setExcluded] = useState(
-        JSON.parse(window.localStorage.getItem('boundary_excluded') ?? '[]') as Id[]);
+        JSON.parse(window.localStorage.getItem('boundary_excluded') ?? '[]')
+        .map((id: any) => typeof(id) === 'number' ? pack({ type: id < 0 ? 'wayGroup' : 'way', id }) : id) as Id[],
+    );
     const [editingBoundary, setEditingBoundary] = useState(false);
     const [boundaryReady, setBoundaryReady] = useState(false);
     const [boundary, setBoundary] = useState([] as LatLngTuple[]);
@@ -60,11 +64,12 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
             const relations = (await getAsync(included.filter(id => !excluded.includes(id)))) as Relation[];
 
-            const wayIds = relations.flatMap(r => 
-                r.data.members
-                    .filter(m => m.type === 'way')
-                    .map(m => pack({ type: 'way', id: m.ref }))
-            );
+            const wayIds = relations
+                .flatMap(r => r.data.members)
+                .map(m => ({ type: m.type, id: m.ref }))
+                .filter(id => id.type === 'way')
+                .map(id => pack(id))
+                .filter(id => !excluded.includes(id));
             const ways = (await getAsync(wayIds)) as Way[];
 
             const nodeIds = ways

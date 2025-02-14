@@ -1,6 +1,6 @@
 import { LatLngTuple } from 'leaflet';
 import { Element, Node, Relation, Way } from './osm_element';
-import { Id, packFrom, unpack } from './id';
+import { Id, pack, packFrom, unpack } from './id';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';
 
@@ -97,7 +97,16 @@ async function getAsyncInternal(ids: Id[], recurse = false): Promise<Element[]> 
         await query(q);
     }
     
-    return ids.map(id => cache.get(id)!);
+    return ids.map(id => {
+        const iu = unpack(id);
+        if (iu.type === 'wayGroup') {
+            const rid = pack({ type: 'relation', id: iu.id });
+            return (cache.get(rid) as Relation | undefined)!.wayGroups.get(id)!;
+        }
+        else {
+            return cache.get(id)!;
+        }
+    });
 }
 
 export function getAsync(ids: Id[], recurse = false): Promise<Element[]> {

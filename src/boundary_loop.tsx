@@ -71,21 +71,21 @@ async function generateBoundaryLoopPath(
     const rs = await getAsync(ids);
     return await mergeRelations(rs as Relation[]);
 
-    async function mergeRelations(relations: Relation[]): Promise<LatLngTuple[] | undefined> {
-        const paths = await Promise.all(relations.map(r => calcRelationPath(r)));
+    function mergeRelations(relations: Relation[]): LatLngTuple[] | undefined {
         const legs = relations
-            .map((r, i) => {
+            .map(r => {
+                const path = calcRelationPath(r);
                 const pathSegments = [] as PathSegment[];
-                const searchTree = new Flatbush(paths[i].length - 1);
-                for (let j = 0; j < paths[j].length - 1; j++) {
+                const searchTree = new Flatbush(path.length - 1);
+                for (let j = 0; j < path.length - 1; j++) {
                     const seg = {
-                        start: paths[j][j],
-                        end: paths[j][j+1],
+                        start: path[j],
+                        end: path[j+1],
                         bounds: [
-                            Math.min(paths[i][j][0], paths[i][j+1][0]),
-                            Math.min(paths[i][j][1], paths[i][j+1][1]),
-                            Math.max(paths[i][j][0], paths[i][j+1][0]),
-                            Math.max(paths[i][j][1], paths[i][j+1][1]),
+                            Math.min(path[j][0], path[j+1][0]),
+                            Math.min(path[j][1], path[j+1][1]),
+                            Math.max(path[j][0], path[j+1][0]),
+                            Math.max(path[j][1], path[j+1][1]),
                         ],
                     } as PathSegment;
                     pathSegments.push(seg);
@@ -193,27 +193,27 @@ async function generateBoundaryLoopPath(
         return [intersectX, intersectY];
     }
     
-    async function calcRelationPath(relation: Relation): Promise<LatLngTuple[]> {
+    function calcRelationPath(relation: Relation): LatLngTuple[] {
         const wgs = relation.children
             .filter(w => !excluded.includes(w.id));
-        const paths = await Promise.all(wgs.map(wg => calcWayGroupPath(wg)));
         const legs = wgs
-            .map((wg, i) => {
+            .map(wg => {
+                const path = calcWayGroupPath(wg);
                 return {
                     id: wg.id,
                     termini: {
                         start: {
                             id: wg.id,
-                            pt: paths[i][0],
-                            vec: Vec2.normalize(Vec2.sub(paths[i][0], paths[i][1])),
+                            pt: path[0],
+                            vec: Vec2.normalize(Vec2.sub(path[0], path[1])),
                         } as Terminus,
                         end: {
                             id: reverse(wg.id),
-                            pt: paths[i][paths[i].length - 1],
-                            vec: Vec2.normalize(Vec2.sub(paths[i][paths[i].length - 1], paths[i][paths[i].length - 2])),
+                            pt: path[path.length - 1],
+                            vec: Vec2.normalize(Vec2.sub(path[path.length - 1], path[path.length - 2])),
                         } as Terminus,
                     },
-                    path: paths[i],
+                    path,
                 } as WayLeg;
             })
             .reduce((map, leg) => {
@@ -285,18 +285,17 @@ async function generateBoundaryLoopPath(
         return mergedPath;
     }
     
-    async function calcWayGroupPath(wg: WayGroup): Promise<LatLngTuple[]> {
+    function calcWayGroupPath(wg: WayGroup): LatLngTuple[] {
         const mergedPath = [] as LatLngTuple[];
-        for (const id of wg.childIds.filter(id => !excluded.includes(id))) {
-            const path = await calcWayPath(id);
+        for (const id of wg.childIds.filter(id => !excluded.includes(unreversed(id)))) {
+            const path = calcWayPath(id, wg.children.find(n => n.id === unreversed(id))!);
             mergedPath.push(...path.slice(mergedPath.length > 0 ? 1 : 0))
         }
 
         return mergedPath;
     }
 
-    async function calcWayPath(id: Id): Promise<LatLngTuple[]> {
-        const way = (await getAsync([id]))[0] as Way;
+    function calcWayPath(id: Id, way: Way): LatLngTuple[] {
         const path = way.children.map(n => [n.lat, n.lon] as LatLngTuple);
         return isReversed(id) ? path.reverse() : path;
     }
@@ -314,7 +313,7 @@ export function BoundaryLoop(): ReactNode {
 
     useEffect(() => {
         async function helper() {
-            if (!map || !boundaryReady || included.length === 0) { return; }
+            if (!map || editingBoundary || !boundaryReady || included.length === 0) { return; }
             const p = await generateBoundaryLoopPath(included, excluded, map);
 
             if (!p) {
@@ -338,7 +337,7 @@ export function BoundaryLoop(): ReactNode {
             map.fitBounds(innerBounds, { padding: [0, 0] });
         }
         helper();
-    }, [included, excluded, map, boundaryReady, setBoundary]);
+    }, [included, excluded, map, boundaryReady, editingBoundary, setBoundary]);
 
     if (!editingBoundary && boundaryReady) {
         return <LayerGroup>

@@ -81,7 +81,7 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
             return <label>
                 <input type='checkbox' checked={enabled()} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
-                {relation.name} (r:
+                {relation.name} (
                 <a target='_blank' href={`https://www.openstreetmap.org/relation/${relation.id}`}>{relation.id}</a>
                 )
             </label>;
@@ -96,7 +96,7 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
         }
     }
 
-    return <TreeNode id={id.toString()} initiallyOpen={false}
+    return <TreeNode id={id} initiallyOpen={false}
         onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
         { genLabel() }
         { relation?.children.map(wg => <WayGroupConfig key={'c' + wg.id} wayGroup={wg} />) }
@@ -199,7 +199,7 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
                 <input type='checkbox' disabled={!inheritEnabled}
                     checked={enabled} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
-                {way.name} (w:
+                {way.name} (
                 <a target='_blank' href={`https://www.openstreetmap.org/relation/${way.id}`}>{way.id}</a>
                 )
             </label>;
@@ -215,7 +215,7 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
     }
 
     if (way) {
-        return <TreeNode id={way.id.toString()} initiallyOpen={true}
+        return <TreeNode id={way.id} initiallyOpen={true}
             onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
             { genLabel() }
         </TreeNode>;

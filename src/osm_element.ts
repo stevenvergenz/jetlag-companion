@@ -85,21 +85,26 @@ export class Relation extends GenericElement<Element, WayGroup> {
 }
 
 export class WayGroup extends GenericElement<Relation, Way> {
-    private static lastIndices: { [id: Id]: number } = {};
-    private static interests = new Map<Id, Relation[]>();
+    private static nextOffsets: { [id: Id]: number } = {};
+    private static interests = new Map<Id, Set<Id>>();
     private static knownIds = new Set<Id>();
 
     public static setInterest(wayId: Id, relation: Relation) {
         if (this.knownIds.has(wayId)) {
             this.fulfillInterest(get(wayId) as Way, relation);
         }
+        else if (this.interests.has(wayId)) {
+            this.interests.get(wayId)!.add(relation.id);
+        }
         else {
-            this.interests.set(wayId, [...(this.interests.get(wayId) ?? []), relation]);
+            this.interests.set(wayId, new Set([relation.id]));
         }
     }
 
     public static fulfillInterests(way: Way) {
-        for (const r of this.interests.get(way.id) ?? []) {
+        this.knownIds.add(way.id);
+        for (const rid of this.interests.get(way.id) ?? []) {
+            const r = get(rid) as Relation;
             this.fulfillInterest(way, r);
         }
         this.interests.delete(way.id);
@@ -110,6 +115,7 @@ export class WayGroup extends GenericElement<Relation, Way> {
         const roles = new Set(relation.data.members
             .filter(m => pack({ type: m.type, id: m.ref }) === way.id)
             .map(m => m.role));
+        console.log(roles);
         if (roles.size === 0) {
             return;
         }
@@ -120,13 +126,16 @@ export class WayGroup extends GenericElement<Relation, Way> {
 
             // no existing way group will take it, add a new one
             if (added.length === 0) {
+                console.log('adding new way group with role', role);
                 const wg = new WayGroup(relation.id, role, way);
                 relation.wayGroups.set(wg.id, wg);
                 relation.addChildUnique(wg.id);
+                way.parentIds.push(wg.id);
                 continue;
             }
 
             // check if the new way bridged two existing way groups
+            console.log(`checking for bridging among ${added.length} way groups`);
             for (let i = 0; i < added.length - 1; i++) {
                 /** The older of two way groups */
                 const senior = added[i];
@@ -134,18 +143,26 @@ export class WayGroup extends GenericElement<Relation, Way> {
                 if (unreversed(senior.childIds[0]) === way.id) {
                     // the newer way group connects to the beginning of the older
                     junior = added.slice(i+1)
-                        .find(wg => [wg.startsWithNode, wg.endsWithNode].includes(senior.startsWithNode));
+                        .find(wg => {
+                            console.log(`Comparing ${senior.id} start ${senior.startsWithNode} with ${wg.id} ends: ${wg.startsWithNode} and ${wg.endsWithNode}`);
+                            return [wg.startsWithNode, wg.endsWithNode].includes(senior.startsWithNode);
+                        });
                 }
                 else {
                     /// the newer way group connects to the end of the older
-                    junior = added.slice(i+1).
-                        find(wg => [wg.startsWithNode, wg.endsWithNode].includes(senior.endsWithNode));
+                    junior = added.slice(i+1)
+                    .find(wg => {
+                        console.log(`Comparing ${senior.id} start ${senior.endsWithNode} with ${wg.id} ends: ${wg.startsWithNode} and ${wg.endsWithNode}`);
+                        return [wg.startsWithNode, wg.endsWithNode].includes(senior.endsWithNode);
+                    });
                 }
 
                 if (!junior) {
+                    console.log('No bridging way group found');
                     continue;
                 }
 
+                console.log(`Bridging way groups ${senior.id} and ${junior.id}`);
                 if (senior.endsWithNode === junior.startsWithNode) {
                     senior.childIds.push(...junior.childIds.slice(1));
                     senior.endsWithNode = junior.endsWithNode;
@@ -162,9 +179,14 @@ export class WayGroup extends GenericElement<Relation, Way> {
                     senior.childIds.push(...junior.childIds.slice(0, -1).reverse().map(w => reverse(w)));
                     senior.endsWithNode = junior.startsWithNode;
                 }
+                else {
+                    console.error('How did we get here?');
+                    continue;
+                }
 
                 relation.wayGroups.delete(junior.id);
                 relation.childIds = relation.childIds.filter(id => id !== junior.id);
+                way.parentIds = way.parentIds.filter(id => id !== junior.id);
             }
         }
     }
@@ -178,10 +200,10 @@ export class WayGroup extends GenericElement<Relation, Way> {
     }
 
     public constructor(relationId: Id, role: string, ...ways: Way[]) {
+        const offset = WayGroup.nextOffsets[relationId] ?? 0;
+        WayGroup.nextOffsets[relationId] = offset + 1;
         const rid = unpack(relationId);
-        const nextOffset = WayGroup.lastIndices[relationId] ?? 0;
-        WayGroup.lastIndices[relationId] = nextOffset;
-        super(pack({ type: 'wayGroup', id: rid.id, offset: nextOffset }), undefined);
+        super(pack({ type: 'wayGroup', id: rid.id, offset }), undefined);
 
         this.parentIds.push(relationId);
         this.role = role;
@@ -203,26 +225,31 @@ export class WayGroup extends GenericElement<Relation, Way> {
             this.startsWithNode = firstNode;
             this.endsWithNode = lastNode;
             way.parentIds.push(this.id);
+            console.log(`Adding way ${way.id} to way group ${this.id} as first`);
         }
         else if (this.endsWithNode === firstNode) {
             this.childIds.push(way.id);
             this.endsWithNode = lastNode;
             way.parentIds.push(this.id);
+            console.log(`Adding way ${way.id} to way group ${this.id} to end`);
         }
         else if (this.startsWithNode === lastNode) {
             this.childIds.unshift(way.id);
             this.startsWithNode = firstNode;
             way.parentIds.push(this.id);
+            console.log(`Adding way ${way.id} to way group ${this.id} to start`);
         }
         else if (this.startsWithNode === firstNode) {
             this.childIds.unshift(reverse(way.id));
             this.startsWithNode = lastNode;
             way.parentIds.push(this.id);
+            console.log(`Adding way ${way.id} to way group ${this.id} to start reversed`);
         }
         else if (this.endsWithNode === lastNode) {
             this.childIds.push(reverse(way.id));
             this.endsWithNode = firstNode;
             way.parentIds.push(this.id);
+            console.log(`Adding way ${way.id} to way group ${this.id} to end reversed`);
         }
         else {
             return false;
@@ -248,6 +275,8 @@ export class Way extends GenericElement<WayGroup, Node> {
             
             this.addChildUnique(nodeId);
         }
+
+        WayGroup.fulfillInterests(this);
     }
 
     public get data() { return this._data as OsmWay; }
