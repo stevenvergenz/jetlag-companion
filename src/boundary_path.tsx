@@ -15,8 +15,14 @@ const EnabledStyle: PathOptions = {
 
 const HoveredStyle: PathOptions = {
     stroke: true,
-    color: 'red',
+    color: 'purple',
     weight: 10,
+};
+
+const ErrorStyle: PathOptions = {
+    stroke: true,
+    color: 'red',
+    weight: 3,
 };
 
 const DisabledStyle: PathOptions = {
@@ -99,7 +105,7 @@ type WayPathProps = {
 export function WayPath({ id }: WayPathProps): ReactNode {
     const {
         boundaryReady,
-        excluded, hovering,
+        excluded, hovering, errorWays,
     } = useContext(Context);
     const [way, setWay] = useState(undefined as Way | undefined);
     const [renderOptions, setRenderOptions] = useState(DisabledStyle as PathOptions);
@@ -125,13 +131,16 @@ export function WayPath({ id }: WayPathProps): ReactNode {
         if (relevantIds.includes(hovering)) {
             setRenderOptions(HoveredStyle);
         }
+        else if (relevantIds.some(id => errorWays.includes(id))) {
+            setRenderOptions(ErrorStyle);
+        }
         else if (relevantIds.some((id) => excluded.includes(id))) {
             setRenderOptions(DisabledStyle);
         }
         else {
             setRenderOptions(EnabledStyle);
         }
-    }, [way, hovering]);
+    }, [way, hovering, errorWays, excluded]);
     
     if (boundaryReady && way) {
         return <Polyline

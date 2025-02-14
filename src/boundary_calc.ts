@@ -113,8 +113,7 @@ export function mergeRelations(
                 const seg = leg.pathSegments[i];
                 const ids = other.searchTree.search(...seg.bounds);
                 if (ids.length > 1) {
-                    console.log('Intersection with more than 1 segment');
-                    return undefined;
+                    throw new BoundaryError('More than one intersection', [leg.id, other.id]);
                 }
                 else if (ids.length === 1) {
                     const otherSeg = other.pathSegments[ids[0]];
@@ -301,4 +300,10 @@ export function calcWayGroupPath(wg: WayGroup, excluded: Id[]): LatLngTuple[] {
 export function calcWayPath(id: Id, way: Way): LatLngTuple[] {
     const path = way.children.map(n => [n.lat, n.lon] as LatLngTuple);
     return isReversed(id) ? path.reverse() : path;
+}
+
+export class BoundaryError extends Error {
+    public constructor(message: string, public relevantIds: Id[]) {
+        super(message);
+    }
 }

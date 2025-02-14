@@ -147,8 +147,7 @@ export function get(id: Id): Element | undefined {
 export async function getStations(poly: LatLngTuple[]): Promise<Node[]> {
     const polyStr = poly.flat().join(' ');
     const q = `(
-        node[railway=station](poly:"${polyStr}");
-        node[highway=bus_stop](poly:"${polyStr}");
+        node[public_transit=platform](poly:"${polyStr}");
     );`;
     return await query(q) as Node[];
 }

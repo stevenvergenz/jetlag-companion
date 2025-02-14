@@ -1,8 +1,8 @@
 import { ReactNode, useState, useEffect, useContext } from 'react';
-import { LatLngBounds, LatLngExpression } from 'leaflet';
+import { LatLngTuple, LatLngBounds, LatLngExpression } from 'leaflet';
 import { LayerGroup, Polygon, useMap } from 'react-leaflet';
 import { Context } from './context';
-import { generateBoundaryLoopPath } from './boundary_calc';
+import { BoundaryError, generateBoundaryLoopPath } from './boundary_calc';
 
 export function BoundaryLoop(): ReactNode {
     const map = useMap();
@@ -11,13 +11,23 @@ export function BoundaryLoop(): ReactNode {
         boundaryReady,
         setBoundary,
         included, excluded,
+        setErrorWays,
     } = useContext(Context);
     const [path, setPath] = useState([] as LatLngExpression[][]);
 
     useEffect(() => {
         async function helper() {
             if (!map || editingBoundary || !boundaryReady || included.length === 0) { return; }
-            const p = await generateBoundaryLoopPath(included, excluded, map.distance.bind(map));
+            let p: LatLngTuple[] | undefined;
+            try {
+                p = await generateBoundaryLoopPath(included, excluded, map.distance.bind(map));
+            } catch (e) {
+                if (e instanceof BoundaryError) {
+                    setErrorWays(e.relevantIds);
+                } else {
+                    throw e;
+                }
+            }
 
             if (!p) {
                 console.log('Boundary path not closed');
@@ -40,7 +50,7 @@ export function BoundaryLoop(): ReactNode {
             map.fitBounds(innerBounds, { padding: [0, 0] });
         }
         helper();
-    }, [included, excluded, map, boundaryReady, editingBoundary, setBoundary]);
+    }, [included, excluded, map, boundaryReady, editingBoundary, setBoundary, setErrorWays]);
 
     if (!editingBoundary && boundaryReady) {
         return <LayerGroup>

@@ -19,6 +19,8 @@ type Content = {
 
     hovering: Id,
     setHovering: (n: Id) => void,
+    errorWays: Id[],
+    setErrorWays: (ids: Id[]) => void,
 
     save: () => void,
 };
@@ -38,6 +40,8 @@ const dummyContent: Content = {
 
     hovering: '',
     setHovering: () => {},
+    errorWays: [],
+    setErrorWays: () => {},
 
     save: () => {},
 };
@@ -57,6 +61,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
     const [boundaryReady, setBoundaryReady] = useState(false);
     const [boundary, setBoundary] = useState([] as LatLngTuple[]);
     const [hovering, setHovering] = useState('');
+    const [errorWays, setErrorWays] = useState([] as Id[]);
 
     useEffect(() => {
         async function helper() {
@@ -107,6 +112,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         boundaryReady, setBoundaryReady,
         boundary, setBoundary,
         hovering, setHovering,
+        errorWays, setErrorWays,
         save, };
     return <Context.Provider value={values}>
         {children}
