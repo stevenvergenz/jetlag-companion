@@ -52,7 +52,7 @@ export type OsmNode = OsmCommon & {
 
 export type OsmElement = OsmRelation | OsmWayGroup | OsmWay | OsmNode;
 
-const QueryLimit = 10 * 1024 * 1024; // 2MB
+const QueryLimit = 512 * 1024 * 1024; // 512MB
 
 async function query(query: string): Promise<Id[]> {
     const res = await fetch(endpoint, {
@@ -74,6 +74,7 @@ async function query(query: string): Promise<Id[]> {
                 cache.set(id, new Node(id, e));
                 break;
         }
+        getCallbacks.get(id)?.(cache.get(id)!);
     }
 
     return body.elements.map(e => packFrom(e));

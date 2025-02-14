@@ -102,7 +102,9 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
     return <TreeNode id={id} initiallyOpen={false}
         onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
         { genLabel() }
-        { relation?.children.map(wg => <WayGroupConfig key={'c' + wg.id} wayGroup={wg} />) }
+        { relation?.children
+            .filter(e => e.data.type === 'wayGroup')
+            .map(wg => <WayGroupConfig key={'c' + wg.id} wayGroup={wg as WayGroup} />) }
     </TreeNode>;
 }
 

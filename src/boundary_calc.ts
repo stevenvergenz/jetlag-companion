@@ -70,12 +70,17 @@ export async function generateBoundaryLoopPath(
         ...[...included]
         .filter(id => !excluded.has(id))
     ) as Relation[];
+    console.log('boundary relations loaded');
     const ws = await getAsync(
-        ...rs.flatMap(r => r.data.members).map(m => packFrom(m))
+        ...rs.flatMap(r => r.data.members)
+        .filter(m => m.type === 'way')
+        .map(m => packFrom(m))
         .filter(id => !excluded.has(id))
     );
+    console.log('boundary ways loaded');
     await getAsync(...ws.flatMap(w => w.childIds));
-    
+    console.log('boundary nodes loaded');
+
     return mergeRelations(rs, excluded, distanceFn);
 }
 
@@ -204,7 +209,7 @@ export function calcIntersection(seg1: PathSegment, seg2: PathSegment): LatLngTu
 
 export function calcRelationPath(relation: Relation, excluded: Set<Id>, distanceFn: DistanceFn): LatLngTuple[] {
     const wgs = relation.children
-        .filter(w => !excluded.has(w.id));
+        .filter(e => e.data.type === 'wayGroup' && !excluded.has(e.id)) as WayGroup[];
     const legs = wgs
         .map(wg => {
             const path = calcWayGroupPath(wg, excluded);
@@ -297,7 +302,7 @@ export function calcRelationPath(relation: Relation, excluded: Set<Id>, distance
 export function calcWayGroupPath(wg: WayGroup, excluded: Set<Id>): LatLngTuple[] {
     const mergedPath = [] as LatLngTuple[];
     for (const id of wg.childIds.filter(id => !excluded.has(unreversed(id)))) {
-        const path = calcWayPath(id, wg.children.find(n => n.id === unreversed(id))!);
+        const path = calcWayPath(id, wg.children.find(n => n.id === unreversed(id)) as Way);
         mergedPath.push(...path.slice(mergedPath.length > 0 ? 1 : 0))
     }
 

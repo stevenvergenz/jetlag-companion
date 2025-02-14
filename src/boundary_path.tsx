@@ -4,7 +4,7 @@ import { LayerGroup, Polyline, useMap } from 'react-leaflet';
 
 import { Id } from './id';
 import { getAsync } from './overpass_api';
-import { Relation, WayGroup, Way } from './osm_element';
+import { Relation, WayGroup, Way, Node } from './osm_element';
 import { Context } from './context';
 
 const EnabledStyle: PathOptions = {
@@ -43,11 +43,11 @@ export function BoundaryLayer(): ReactNode {
                 // loaded enabled relations
                 (await getAsync(...[...included].filter(notExcluded)) as Relation[])
                 // enabled way groups
-                .flatMap(r => r.children.filter(notExcluded))
+                .flatMap(r => r.children.filter(e => e instanceof WayGroup && notExcluded(e)))
                 // enabled ways
                 .flatMap(wg => wg.children.filter(notExcluded))
                 // nodes
-                .flatMap(w => w.children)
+                .flatMap(w => w.children as Node[])
                 // convert to LatLngTuple
                 .map(n => [n.lat, n.lon] as LatLngTuple)
             );
@@ -80,8 +80,8 @@ export function RelationPath({ id }: RelationPathProps): ReactNode {
     }, [id, relation]);
 
     return relation?.children
-        .filter(notExcluded)
-        .map(wg => <WayGroupPath key={wg.id} wayGroup={wg} />);
+        .filter(e => e instanceof WayGroup && notExcluded(e))
+        .map(wg => <WayGroupPath key={wg.id} wayGroup={wg as WayGroup} />);
 }
 
 type WayGroupPathProps = {

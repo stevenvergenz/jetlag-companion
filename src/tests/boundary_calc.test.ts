@@ -3,7 +3,8 @@ import { expect, test } from 'vitest';
 import { setup, relation, ways, nodes } from './test_common';
 
 import { calcIntersection, calcRelationPath, calcWayGroupPath, calcWayPath, mergeRelations } from '../boundary_calc';
-import { reverse } from '../id';
+import { Id, reverse } from '../id';
+import { WayGroup } from '../osm_element';
 import { LatLngTuple } from 'leaflet';
 
 function distance(a: LatLngTuple, b: LatLngTuple): number {
@@ -38,16 +39,16 @@ test('Way path reverse', () => {
 
 test('WayGroup path', () => {
     setup();
-    const wg = relation(1, [3, 4, 5]).children[0];
-    const path = calcWayGroupPath(wg, ['w:3']);
+    const wg = relation(1, [3, 4, 5]).children[0] as WayGroup;
+    const path = calcWayGroupPath(wg, new Set<Id>(['w:3']));
     const realPath = nodes(4, 5, 6, 7).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
 });
 
 test('WayGroup path reverse', () => {
     setup();
-    const wg = relation(1, [3, 400, 5]).children[0];
-    const path = calcWayGroupPath(wg, ['w:3']);
+    const wg = relation(1, [3, 400, 5]).children[0] as WayGroup;
+    const path = calcWayGroupPath(wg, new Set<Id>(['w:3']));
     const realPath = nodes(4, 5, 6, 7).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
 });
@@ -55,7 +56,7 @@ test('WayGroup path reverse', () => {
 test('Relation path', () => {
     setup();
     const r = relation(1, [3, 4, 5]);
-    const path = calcRelationPath(r, [], distance);
+    const path = calcRelationPath(r, new Set(), distance);
     const realPath = nodes(3, 4, 5, 6, 7).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
 });
@@ -63,7 +64,7 @@ test('Relation path', () => {
 test('Relation path gap', () => {
     setup();
     const r = relation(1, [1, 11]);
-    const path = calcRelationPath(r, [], distance);
+    const path = calcRelationPath(r, new Set(), distance);
     const realPath = nodes(1, 4, 11, 15).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
 });
@@ -71,7 +72,7 @@ test('Relation path gap', () => {
 test('Relation path gap reverse', () => {
     setup();
     const r = relation(1, [1, 1100]);
-    const path = calcRelationPath(r, [], distance);
+    const path = calcRelationPath(r, new Set(), distance);
     const realPath = nodes(1, 4, 11, 15).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
 });
@@ -111,7 +112,7 @@ test('Merge open', () => {
     const r1 = relation(1, [600]);
     const r2 = relation(2, [4]);
     const r3 = relation(3, [7]);
-    const loop = mergeRelations([r1, r2, r3], [], distance);
+    const loop = mergeRelations([r1, r2, r3], new Set(), distance);
     expect(loop).toBe(undefined);
 });
 
@@ -121,7 +122,7 @@ test('Merge closed', () => {
     const r2 = relation(2, [4]);
     const r3 = relation(3, [7]);
     const r4 = relation(4, [9]);
-    const loop = mergeRelations([r1, r2, r3, r4], [], distance);
+    const loop = mergeRelations([r1, r2, r3, r4], new Set(), distance);
     const realLoop = nodes(4, 8, 11, 12, 13, 9, 6, 5).map(n => [n.lat, n.lon]);
     expect(loop).toEqual(realLoop);
 });
