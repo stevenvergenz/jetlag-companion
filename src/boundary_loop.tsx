@@ -311,7 +311,7 @@ export function BoundaryLoop(): ReactNode {
 
     useEffect(() => {
         async function helper() {
-            if (!map || !boundaryReady) { return; }
+            if (!map || !boundaryReady || included.length === 0) { return; }
             const p = await generateBoundaryLoopPath(included, excluded, map);
 
             if (!p) {
