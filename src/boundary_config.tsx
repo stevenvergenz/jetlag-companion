@@ -186,7 +186,8 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
 
     useEffect(() => {
         if (way) {
-            setInheritEnabled(way.parents.every((p) => !excluded.includes(p.id)));
+            setInheritEnabled(!excluded.includes(-way.first.id)
+                && way.parents.every((p) => !excluded.includes(p.id)));
             setEnabledLocal(!excluded.includes(way.id));
         }
     }, [way, excluded])

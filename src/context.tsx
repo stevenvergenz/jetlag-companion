@@ -32,6 +32,17 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         JSON.parse(window.localStorage.getItem('boundary_excluded') ?? '[]') as number[]);
 
     function save() {
+        let i = included;
+        let e = excluded;
+        for (const eid of e) {
+            if (i.includes(eid)) {
+                i = i.filter(id => id !== eid);
+                e = e.filter(id => id !== eid);
+            }
+        }
+        setIncluded(i);
+        setExcluded(e);
+
         localStorage.setItem('boundary_included', JSON.stringify(included));
         localStorage.setItem('boundary_excluded', JSON.stringify(excluded));
     }

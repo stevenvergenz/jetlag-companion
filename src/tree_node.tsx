@@ -33,9 +33,9 @@ export function TreeNode({ id, children, initiallyOpen, onMouseEnter, onMouseLea
         <div onMouseEnter={onMouseEnter && mouseEnter} onMouseLeave={onMouseLeave && mouseLeave}>
             <button type='button' onClick={toggle}>
                 { !Array.isArray(children) ? '•' : open ? '⮟' : '⮞' }
-                &nbsp;
-                {Array.isArray(children) ? children[0] : children}
             </button>
+            &nbsp;
+            {Array.isArray(children) ? children[0] : children}
         </div>
         { open && <ol className='ps-4'>
             {Array.isArray(children) &&
