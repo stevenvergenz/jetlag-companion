@@ -167,23 +167,15 @@ export async function requestStations(
         // relation[type=route_master] describes a full route with all variants
         const q = `
             nwr(poly:"${polyStr}") -> .all;
+            nw.all[public_transport=station] -> .stations;
+            nw.all[public_transport=platform] -> .platforms;
             rel.all[public_transport=stop_area] -> .areas;
-            way(r.areas: platform) -> .platform_ways;
-            node(r.areas: platform) -> .platform_nodes;
-            way.all[public_transport=station] -> .station_ways;
-            node.all[public_transport=station] -> .station_nodes;
-            (
-                rel(bw.platform_ways: platform)[type=route];
-                rel(bn.platform_nodes: platform)[type=route];
-            ) -> .routes;
+            rel.all[type=route] -> .routes;
             rel(br.routes)[type=route_master] -> .route_masters;
-            
             (
                 .areas;
-                .platform_ways;
-                .platform_nodes;
-                .station_ways;
-                .station_nodes;
+                .platforms;
+                .stations;
                 .routes;
                 .route_masters;
             );
@@ -213,9 +205,12 @@ export async function requestStations(
             continue;
         }
 
-        const routeMasters = adjacentStopAreas
+        const busPlatforms = adjacentStopAreas
             .flatMap(a => a.children)
-            .filter(e => e.data.tags?.public_transport === 'platform')
+            .filter(e => 
+                e.data.tags?.public_transport === 'platform' && e.data.tags?.highway === 'bus_stop'
+            ) as Relation[];
+        const routeMasters = busPlatforms
             .flatMap(p => p.parents)
             .filter(e => e.data.tags?.type === 'route')
             .flatMap(r => r.parents)
@@ -224,7 +219,7 @@ export async function requestStations(
                     && arr.slice(i + 1).findIndex(e => e.id === r.id) === -1;
             }) as Relation[];
 
-        if (routeMasters.length < busTransferThreshold) {
+        if (busPlatforms.length > 0 && routeMasters.length < busTransferThreshold) {
             continue;
         }
 
