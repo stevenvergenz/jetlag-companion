@@ -1,9 +1,13 @@
 import { Boundary } from "./boundaries";
 
-type OsmQueryResult<T extends OsmCommon> = {
+const ENDPOINT = 'https://overpass-api.de/api/interpreter';
+const LOWER_US = '24.41,-125.51,49.61,-66.09';
+const cache = new Map<number, Element>();
+
+type OsmQueryResult = {
     version: string,
     generator: string,
-    elements: T[],
+    elements: OsmElement[],
 };
 
 type OsmElementType = 'relation' | 'way' | 'node';
@@ -35,28 +39,170 @@ export type OsmNode = OsmCommon & {
     lon: number,
 };
 
-const ENDPOINT = 'https://overpass-api.de/api/interpreter';
+type OsmElement = OsmRelation | OsmWay | OsmNode;
 
-function req<T extends OsmCommon>(query: string): Promise<OsmQueryResult<T>> {
-    return fetch(ENDPOINT, { method: 'POST', body: query })
-        .then(res => res.json() as Promise<OsmQueryResult<T>>);
+export class Element {
+    protected _data: OsmElement;
+
+    public constructor(data: OsmElement) {
+        this._data = data;
+    }
+
+    public get id(): number {
+        return this._data.id;
+    }
+
+    public get name(): string {
+        return this._data.tags?.['name'] 
+            ?? this._data.tags?.['description'] 
+            ?? this._data.tags?.['ref'] 
+            ?? '<unspecified>';
+    }
 }
 
-export async function search_road(pattern: string): Promise<OsmRelation[]> {
-    const query = `
-        [out:json];
-        relation[type=route](24.41,-125.51,49.61,-66.09);
-        (
-            relation["name" ~ "${pattern}"];
-        );
-        out;
-        `;
+export class Relation extends Element {
+    public constructor(data: OsmRelation) {
+        super(data);
 
-    const res = await req<OsmRelation>(query);
-    return res.elements;
+        for (const w of this.ways) {
+            if (!w) { continue; }
+            w.parents.push(this);
+        }
+    }
+
+    public get data() { return this._data as OsmRelation; }
+
+    public get ways(): Way[] {
+        return this.data.members
+            .filter(m => m.type === 'way')
+            .map(m => cache.get(m.ref) as Way);
+    }
+
+    public get wayGroups(): Way[] {
+        return this.ways
+            .filter(w => w.previous === undefined);
+    }
 }
 
-export async function get_road_path(b: Boundary): Promise<OsmNode[]> {
+export class Way extends Element {
+    /** Maps node IDs to a way that has that node as its first */
+    static firstNodes = new Map<number, Way>();
+    /** Maps node IDs to a way that has that node as its last */
+    static lastNodes = new Map<number, Way>();
+
+    public parents: Relation[];
+
+    public previous?: Way;
+    public next?: Way;
+
+    public constructor(data: OsmWay, ...parents: Relation[]) {
+        super(data);
+        this.parents = parents;
+
+        for (const n of this.nodes) {
+            if (!n) { continue; }
+            n.parents.push(this);
+        }
+
+        Way.firstNodes.set(this.nodes[0].id, this);
+        Way.lastNodes.set(this.nodes[this.nodes.length - 1].id, this);
+
+        let other: Way | undefined;
+        if (other = Way.lastNodes.get(this.nodes[0].id)) {
+            other.next = this;
+            this.previous = other;
+        }
+
+        if (other = Way.firstNodes.get(this.nodes[this.nodes.length - 1].id)) {
+            other.previous = this;
+            this.next = other;
+        }
+    }
+
+    public get data() { return this._data as OsmWay; }
+
+    public get nodes(): Node[] {
+        return this.data.nodes
+            .map(n => cache.get(n) as Node);
+    }
+
+    public get first(): Way {
+        let f: Way = this;
+        while (f.previous) {
+            f = f.previous;
+        }
+        return f;
+    }
+
+    public get following(): Way[] {
+        let f: Way | undefined = this.next;
+        let following = [];
+        while (f) {
+            following.push(f);
+            f = f.next;
+        }
+        return following;
+    }
+}
+
+export class Node extends Element {
+    public parents: Way[];
+    public constructor(data: OsmNode, ...parents: Way[]) {
+        super(data);
+        this.parents = parents;
+    }
+
+    public get data() { return this._data as OsmNode; }
+
+    public get lat() { return this.data.lat; }
+    public get lon() { return this.data.lon; }
+}
+
+async function req(type: 'relation', id: number): Promise<Relation>;
+async function req(type: 'way', id: number): Promise<Way>;
+async function req(type: 'node', id: number): Promise<Node>;
+async function req(type: OsmElementType, id: number): Promise<Element> {
+    if (!cache.has(id)) {
+        const res = await fetch(ENDPOINT, {
+            method: 'POST',
+            body: `[out:json]; ${type}(${id}); >>; out;`,
+        });
+        const body = await res.json() as OsmQueryResult;
+        for (const e of body.elements) {
+            switch (e.type) {
+                case 'relation':
+                    cache.set(e.id, new Relation(e));
+                    break;
+                case 'way':
+                    cache.set(e.id, new Way(e));
+                    break;
+                case 'node':
+                    cache.set(e.id, new Node(e));
+                    break;
+            }
+        }
+    }
+    if (!cache.has(id)) {
+        throw new Error('Element not found');
+    } else {
+        return cache.get(id) as Element;
+    }
+}
+
+export function getRelation(id: number): Promise<Relation> {
+    return req('relation', id);
+}
+
+export function getWay(id: number): Promise<Way> {
+    return req('way', id);
+}
+
+export async function getNode(id: number): Promise<Node> {
+    return req('node', id);
+}
+
+/*
+export async function get_road_paths(b: Boundary): Promise<OsmNode[][]> {
     const waysQuery = `
         [out:json];
         relation
@@ -104,62 +250,7 @@ export async function get_road_path(b: Boundary): Promise<OsmNode[]> {
         return map;
     }, new Map());
 
-    // merge ways if start and end nodes are close together
-    unstable = ways.size > 1;
-    while (unstable) {
-        unstable = false;
-        for (const wayId of ways.keys()) {
-            let nodeIds = ways.get(wayId) as number[];
-
-            const startLatLng = {
-                lat: nodeLookup.get(nodeIds[0])?.lat as number,
-                lng: nodeLookup.get(nodeIds[0])?.lon as number,
-            } satisfies google.maps.LatLngLiteral;
-            let closestId = undefined;
-            let closeness = Infinity;
-
-            for (const [otherId, otherNodeIds] of ways) {
-                if (otherId === wayId) {
-                    continue;
-                }
-                const otherLatLng = {
-                    lat: nodeLookup.get(otherNodeIds[otherNodeIds.length - 1])?.lat as number,
-                    lng: nodeLookup.get(otherNodeIds[otherNodeIds.length - 1])?.lon as number,
-                } satisfies google.maps.LatLngLiteral;
-                const dist = google.maps.geometry.spherical.computeDistanceBetween(
-                    startLatLng,
-                    otherLatLng,
-                );
-                console.log(`${otherId} -> ${wayId} = ${dist}`);
-                if (dist < closeness) {
-                    closeness = dist;
-                    closestId = otherId;
-                }
-            }
-
-            if (closestId !== undefined && closeness < 500) {
-                let pNodes = ways.get(closestId) as number[];
-                ends.delete(pNodes[pNodes.length - 1]);
-                pNodes.push(...nodeIds);
-                ways.set(closestId, pNodes);
-                ends.set(pNodes[pNodes.length - 1], closestId);
-                ways.delete(wayId);
-                unstable = true;
-            }
-        }
-    }
-    
     console.log('ways', ways);
-    return [...ways.values()][0].map(id => nodeLookup.get(id) as OsmNode);
+    return [...ways.values()].map(way => way.map(id => nodeLookup.get(id) as OsmNode));
 }
-
-export function member_roles(relation: OsmRelation | undefined): string[] {
-    if (!relation) {
-        return [];
-    }
-
-    return [...relation.members.reduce((set, m) => {
-        set.add(m.role);
-        return set;
-    }, new Set<string>())];
-}
+*/
