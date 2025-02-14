@@ -1,5 +1,5 @@
 import { OsmElement, OsmNode, OsmRelation, OsmWay, get } from "./overpass_api";
-import { Id, pack, unpack, reverse, unreversed } from './id';
+import { Id, pack, unpack, reverse, unreversed, isReversed } from './id';
 
 export abstract class Element {
 
@@ -115,7 +115,6 @@ export class WayGroup extends GenericElement<Relation, Way> {
         const roles = new Set(relation.data.members
             .filter(m => pack({ type: m.type, id: m.ref }) === way.id)
             .map(m => m.role));
-        console.log(roles);
         if (roles.size === 0) {
             return;
         }
@@ -140,21 +139,28 @@ export class WayGroup extends GenericElement<Relation, Way> {
                 /** The older of two way groups */
                 const senior = added[i];
                 let junior: WayGroup | undefined;
+
                 if (unreversed(senior.childIds[0]) === way.id) {
+                    //console.log(`checking against ${senior.id} start: ${senior.startsWithNode}`);
                     // the newer way group connects to the beginning of the older
                     junior = added.slice(i+1)
                         .find(wg => {
-                            console.log(`Comparing ${senior.id} start ${senior.startsWithNode} with ${wg.id} ends: ${wg.startsWithNode} and ${wg.endsWithNode}`);
+                            //console.log('Comparingwith');
                             return [wg.startsWithNode, wg.endsWithNode].includes(senior.startsWithNode);
                         });
                 }
-                else {
+                else if (unreversed(senior.childIds[senior.childIds.length - 1]) === way.id) {
+                    //console.log(`checking against ${senior.id} end: ${senior.endsWithNode}`);
                     /// the newer way group connects to the end of the older
                     junior = added.slice(i+1)
                     .find(wg => {
-                        console.log(`Comparing ${senior.id} start ${senior.endsWithNode} with ${wg.id} ends: ${wg.startsWithNode} and ${wg.endsWithNode}`);
+                        //console.log('Comparing', senior, 'with', wg);
                         return [wg.startsWithNode, wg.endsWithNode].includes(senior.endsWithNode);
                     });
+                }
+                else {
+                    console.error('Senior does not match fulfilled way!');
+                    return;
                 }
 
                 if (!junior) {
@@ -218,9 +224,10 @@ export class WayGroup extends GenericElement<Relation, Way> {
     }
 
     public add(way: Way): boolean {
-        const firstNode = pack({ type: 'node', id: way.data.nodes[0] });
-        const lastNode = pack({ type: 'node', id: way.data.nodes[way.data.nodes.length - 1] });
+        const firstNode = way.childIds[0];
+        const lastNode = way.childIds[way.childIds.length - 1];
         if (this.childIds.length === 0) {
+            console.log('way first/last:', firstNode, lastNode);
             this.childIds.push(way.id);
             this.startsWithNode = firstNode;
             this.endsWithNode = lastNode;
@@ -228,24 +235,28 @@ export class WayGroup extends GenericElement<Relation, Way> {
             console.log(`Adding way ${way.id} to way group ${this.id} as first`);
         }
         else if (this.endsWithNode === firstNode) {
+            console.log('way first/last:', firstNode, lastNode);
             this.childIds.push(way.id);
             this.endsWithNode = lastNode;
             way.parentIds.push(this.id);
             console.log(`Adding way ${way.id} to way group ${this.id} to end`);
         }
         else if (this.startsWithNode === lastNode) {
+            console.log('way first/last:', firstNode, lastNode);
             this.childIds.unshift(way.id);
             this.startsWithNode = firstNode;
             way.parentIds.push(this.id);
             console.log(`Adding way ${way.id} to way group ${this.id} to start`);
         }
         else if (this.startsWithNode === firstNode) {
+            console.log('way first/last:', firstNode, lastNode);
             this.childIds.unshift(reverse(way.id));
             this.startsWithNode = lastNode;
             way.parentIds.push(this.id);
             console.log(`Adding way ${way.id} to way group ${this.id} to start reversed`);
         }
         else if (this.endsWithNode === lastNode) {
+            console.log('way first/last:', firstNode, lastNode);
             this.childIds.push(reverse(way.id));
             this.endsWithNode = firstNode;
             way.parentIds.push(this.id);
@@ -254,7 +265,8 @@ export class WayGroup extends GenericElement<Relation, Way> {
         else {
             return false;
         }
-
+        console.log('new group first/last:', this.startsWithNode, this.endsWithNode);
+        
         return true;
     }
 }

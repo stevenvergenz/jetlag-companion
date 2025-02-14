@@ -4,7 +4,7 @@ import { Id, pack, packFrom, unpack } from './id';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';
 
-const cache = new Map<Id, Element>();
+export const cache = new Map<Id, Element>();
 
 const promises = new Map<Id, Promise<Element[]>>();
 

@@ -47,11 +47,11 @@ export const Context = createContext(dummyContent as Content);
 export function ContextProvider({ children }: { children: ReactNode }) {
     const [included, setIncluded] = useState(
         JSON.parse(window.localStorage.getItem('boundary_included') ?? '[]')
-        .map((id: any) => typeof(id) === 'number' ? pack({ type: 'relation', id }) : id) as Id[],
+        .map((id: number | string) => typeof(id) === 'number' ? pack({ type: 'relation', id }) : id) as Id[],
     );
     const [excluded, setExcluded] = useState(
         JSON.parse(window.localStorage.getItem('boundary_excluded') ?? '[]')
-        .map((id: any) => typeof(id) === 'number' ? pack({ type: id < 0 ? 'wayGroup' : 'way', id }) : id) as Id[],
+        .map((id: number | string) => typeof(id) === 'number' ? pack({ type: id < 0 ? 'wayGroup' : 'way', id }) : id) as Id[],
     );
     const [editingBoundary, setEditingBoundary] = useState(false);
     const [boundaryReady, setBoundaryReady] = useState(false);
