@@ -1,6 +1,6 @@
 import { ReactNode, useContext, useEffect, useState } from 'react';
 
-import { getAsync, get } from './overpass_api';
+import { getAsync } from './overpass_api';
 import { Relation, Way } from './osm_element';
 import { TreeNode } from './tree_node';
 import { Context } from './context';
@@ -43,6 +43,7 @@ type RelationConfigProps = {
 
 export function RelationConfig({ id }: RelationConfigProps): ReactNode {
     const {
+        boundaryReady,
         hovering, setHovering,
         excluded, setExcluded,
     } = useContext(Context);
@@ -50,10 +51,10 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
     const [relation, setRelation] = useState(undefined as Relation | undefined);
 
     useEffect(() => {
-        if (!relation || relation.id !== id) {
-            getAsync<Relation>(id).then(r => setRelation(r));
+        if (boundaryReady && (!relation || relation.id !== id)) {
+            getAsync('relation', [id]).then(([r]) => setRelation(r));
         }
-    }, [id, relation]);
+    }, [id, relation, boundaryReady]);
 
     function enabled() {
         return relation && !excluded.includes(relation.id);
@@ -103,6 +104,7 @@ type WayGroupConfigProps = {
 
 export function WayGroupConfig({ id }: WayGroupConfigProps): ReactNode {
     const {
+        boundaryReady,
         hovering, setHovering,
         excluded, setExcluded,
     } = useContext(Context);
@@ -112,10 +114,10 @@ export function WayGroupConfig({ id }: WayGroupConfigProps): ReactNode {
     const [enabled, setEnabledLocal] = useState(true);
 
     useEffect(() => {
-        if (!way || way.id !== id) {
-            setWay(get<Way>(id));
+        if (boundaryReady && (!way || way.id !== id)) {
+            getAsync('way', [id]).then(([w]) => setWay(w));
         }
-    }, [id, way]);
+    }, [id, way, boundaryReady]);
 
     useEffect(() => {
         const groupId = -(way?.id ?? 0);
@@ -174,6 +176,7 @@ type WayConfigProps = {
 
 export function WayConfig({ id }: WayConfigProps): ReactNode {
     const {
+        boundaryReady,
         hovering, setHovering,
         excluded, setExcluded,
     } = useContext(Context);
@@ -183,10 +186,10 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
     const [enabled, setEnabledLocal] = useState(true);
 
     useEffect(() => {
-        if (!way || way.id !== id) {
-            setWay(get<Way>(id));
+        if (boundaryReady && (!way || way.id !== id)) {
+            getAsync('way', [id]).then(([w]) => setWay(w));
         }
-    }, [id, way]);
+    }, [id, way, boundaryReady]);
 
     useEffect(() => {
         if (way) {
@@ -229,8 +232,10 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
         }
     }
 
-    return way && <TreeNode id={way.id.toString()} initiallyOpen={true}
-        onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
-        { genLabel() }
-    </TreeNode>;
+    if (way) {
+        return <TreeNode id={way.id.toString()} initiallyOpen={true}
+            onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
+            { genLabel() }
+        </TreeNode>;
+    }
 }

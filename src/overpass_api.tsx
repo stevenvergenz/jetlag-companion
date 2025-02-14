@@ -2,7 +2,11 @@ import { Element, Node, Relation, Way } from './osm_element';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';
 
-const cache = new Map<number, Element>();
+const cache: {[type: string]: Map<number, Element>} = {
+    'relation': new Map<number, Relation>(),
+    'way': new Map<number, Way>(),
+    'node': new Map<number, Node>(),
+};
 const promises = new Map<number, Promise<Element[]>>();
 
 type OsmQueryResult = {
@@ -44,37 +48,40 @@ export type OsmElement = OsmRelation | OsmWay | OsmNode;
 
 const QueryLimit = 2 * 1024 * 1024; // 2MB
 
-async function getAsyncInternal<T extends Element>(ids: number[], recurse = false): Promise<T[]> {
-    const queryIds = ids.filter(id => !cache.has(id));
+async function getAsyncInternal(type: OsmElementType, ids: number[], recurse = false): Promise<Element[]> {
+    const queryIds = ids.filter(id => !cache[type].has(id));
     if (queryIds.length > 0) {
         const recurseQuery = recurse ? '>>;' : '';
         const res = await fetch(endpoint, {
             method: 'POST',
-            body: `[maxsize:${QueryLimit}][out:json]; nwr(id:${queryIds.join(',')}); ${recurseQuery} out;`,
+            body: `[maxsize:${QueryLimit}][out:json]; ${type}(id:${queryIds.join(',')}); ${recurseQuery} out;`,
         });
         const body = await res.json() as OsmQueryResult;
         for (const e of body.elements) {
             switch (e.type) {
                 case 'relation':
-                    cache.set(e.id, new Relation(e));
+                    cache[e.type].set(e.id, new Relation(e));
                     break;
                 case 'way':
-                    cache.set(e.id, new Way(e));
+                    cache[e.type].set(e.id, new Way(e));
                     break;
                 case 'node':
-                    cache.set(e.id, new Node(e));
+                    cache[e.type].set(e.id, new Node(e));
                     break;
             }
         }
     }
     
-    return ids.map(id => cache.get(id) as T);
+    return ids.map(id => cache[type].get(id)!);
 }
 
-export function getAsync<T extends Element>(ids: number[], recurse = false): Promise<T[]> {
-    const queryIds = ids.filter(id => !cache.has(id) || recurse && !cache.get(id)!.complete);
+export function getAsync(type: 'relation', ids: number[], recurse?: boolean): Promise<Relation[]>;
+export function getAsync(type: 'way', ids: number[], recurse?: boolean): Promise<Way[]>;
+export function getAsync(type: 'node', ids: number[], recurse?: boolean): Promise<Node[]>;
+export function getAsync(type: OsmElementType, ids: number[], recurse = false): Promise<Element[]> {
+    const queryIds = ids.filter(id => !cache[type].has(id) || recurse && !cache[type].get(id)!.complete);
     if (queryIds.length > 0) {
-        const p = getAsyncInternal(queryIds, recurse)
+        const p = getAsyncInternal(type, queryIds, recurse)
             .finally(() => {
                 for (const id of queryIds) {
                     promises.delete(id);
@@ -88,14 +95,17 @@ export function getAsync<T extends Element>(ids: number[], recurse = false): Pro
 
     return Promise.all(ids.map(async (id) => {
         if (promises.has(id)) {
-            return (await promises.get(id)!).find(e => e.id === id) as T;
+            return (await promises.get(id)!).find(e => e.id === id)!;
         }
         else {
-            return cache.get(id) as T;
+            return cache[type].get(id)!;
         }
     }));
 }
 
-export function get<T extends Element>(id: number): T | undefined {
-    return cache.get(id) as T | undefined;
+export function get(type: 'relation', id: number): Relation | undefined;
+export function get(type: 'way', id: number): Way | undefined;
+export function get(type: 'node', id: number): Node | undefined;
+export function get(type: OsmElementType, id: number): Element | undefined {
+    return cache[type].get(id);
 }

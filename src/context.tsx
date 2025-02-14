@@ -1,6 +1,5 @@
 import { createContext, ReactNode, useEffect, useState } from 'react';
-import { get, getAsync } from './overpass_api';
-import { Relation } from './osm_element';
+import { getAsync } from './overpass_api';
 
 type Content = {
     included: number[],
@@ -49,19 +48,23 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         async function helper() {
-            const ready = included
-                .flatMap(id => get(id)?.completeIds.filter(id => !excluded.includes(id)))
-                .every(id => id && get(id));
+            setBoundaryReady(false);
 
-            if (!ready) {
-                setBoundaryReady(false);
+            const relations = await getAsync('relation', included.filter(id => !excluded.includes(id)));
 
-                const relations = await getAsync<Relation>(included.filter(id => !excluded.includes(id)));
-                const wayIds = relations.flatMap(r => r.data.members.filter(m => m.type === 'way').map(m => m.ref));
-                await getAsync(wayIds, true);
+            const wayIds = relations.flatMap(r => 
+                r.data.members
+                    .filter(m => m.type === 'way')
+                    .map(m => m.ref)
+            );
+            const ways = await getAsync('way', wayIds);
 
-                setBoundaryReady(true);
-            }
+            const nodeIds = ways
+                .filter(w => !excluded.includes(w.id) && !excluded.includes(-w.first.id))
+                .flatMap(w => w.data.nodes);
+            await getAsync('node', nodeIds);
+
+            setBoundaryReady(true);
         }
 
         helper();

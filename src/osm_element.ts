@@ -52,7 +52,8 @@ export class Relation extends Element {
         return this.data.members
             .map((m) => m.ref)
             .filter((id, i, arr) => !arr.slice(0, i).includes(id))
-            .map((id) => get(id) as Way);
+            .map((id) => get('way', id)!)
+            .filter((w) => w !== undefined);
     }
 
     public get wayGroups(): Way[] {
@@ -77,16 +78,16 @@ export class Way extends Element {
             Element.parentIds.set(n, [...(Element.parentIds.get(n) ?? []), this.id]);
         }
 
-        Way.firstNodes.set(this.children[0].id, this);
-        Way.lastNodes.set(this.children[this.children.length - 1].id, this);
+        Way.firstNodes.set(this.data.nodes[0], this);
+        Way.lastNodes.set(this.data.nodes[this.data.nodes.length - 1], this);
 
-        let other = Way.lastNodes.get(this.children[0].id);
+        let other = Way.lastNodes.get(this.data.nodes[0]);
         if (other) {
             other.next = this;
             this.previous = other;
         }
 
-        other = Way.firstNodes.get(this.children[this.children.length - 1].id);
+        other = Way.firstNodes.get(this.data.nodes[this.data.nodes.length - 1]);
         if (other) {
             other.previous = this;
             this.next = other;
@@ -96,12 +97,13 @@ export class Way extends Element {
     public get data() { return this._data as OsmWay; }
 
     public get parents(): Relation[] {
-        return Element.parentIds.get(this.id)?.map(pid => get(pid) as Relation) ?? [];
+        return Element.parentIds.get(this.id)?.map(pid => get('relation', pid)!) ?? [];
     }
 
     public get children(): Node[] {
         return this.data.nodes
-            .map(n => get(n) as Node);
+            .map(n => get('node', n)!)
+            .filter(n => n !== undefined);
     }
 
     public get first(): Way {
@@ -131,7 +133,7 @@ export class Node extends Element {
     public get data() { return this._data as OsmNode; }
 
     public get parents(): Way[] {
-        return Element.parentIds.get(this.id)?.map(pid => get(pid) as Way) ?? [];
+        return Element.parentIds.get(this.id)!.map(pid => get('way', pid)!) ?? [];
     }
 
     public get children() {

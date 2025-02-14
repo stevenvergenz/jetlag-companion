@@ -67,7 +67,7 @@ async function generateBoundaryLoopPath(
     included: number[], excluded: number[], map: LMap
 ): Promise<LatLngTuple[] | undefined> {
     const ids = included.filter(id => !excluded.includes(id));
-    const rs = await getAsync<Relation>(ids);
+    const rs = await getAsync('relation', ids);
     return mergeRelations(rs);
 
     function mergeRelations(relations: Relation[]): LatLngTuple[] | undefined {
@@ -301,34 +301,36 @@ async function generateBoundaryLoopPath(
 
 export function BoundaryLoop(): ReactNode {
     const map = useMap();
-    const { editingBoundary, included, excluded } = useContext(Context);
+    const { editingBoundary, boundaryReady, included, excluded } = useContext(Context);
     const [path, setPath] = useState([] as LatLngExpression[][]);
 
     useEffect(() => {
-        if (!map) { return; }
-        generateBoundaryLoopPath(included, excluded, map)
-            .then((p) => {
-                if (!p) {
-                    console.log('Boundary path not closed');
-                    return;
-                } else {
-                    console.log(`Boundary path closed with ${p.length} points`);
-                }
+        async function helper() {
+            if (!map || !boundaryReady) { return; }
+            const p = await generateBoundaryLoopPath(included, excluded, map);
 
-                const innerBounds = new LatLngBounds(p);
-                const outerBounds = innerBounds.pad(1);
-                setPath([
-                    [
-                        outerBounds.getNorthEast(), outerBounds.getNorthWest(),
-                        outerBounds.getSouthWest(), outerBounds.getSouthEast(),
-                    ],
-                    p,
-                ]);
-                map.fitBounds(innerBounds);
-            });
-    }, [included, excluded, map]);
+            if (!p) {
+                console.log('Boundary path not closed');
+                return;
+            } else {
+                console.log(`Boundary path closed with ${p.length} points`);
+            }
 
-    if (!editingBoundary) {
+            const innerBounds = new LatLngBounds(p);
+            const outerBounds = innerBounds.pad(2);
+            setPath([
+                [
+                    outerBounds.getNorthEast(), outerBounds.getNorthWest(),
+                    outerBounds.getSouthWest(), outerBounds.getSouthEast(),
+                ],
+                p,
+            ]);
+            map.fitBounds(innerBounds, { padding: [0, 0] });
+        }
+        helper();
+    }, [included, excluded, map, boundaryReady]);
+
+    if (!editingBoundary && boundaryReady) {
         return <LayerGroup>
             <Polygon pathOptions={{ color: 'black' }} positions={path} />
         </LayerGroup>;
