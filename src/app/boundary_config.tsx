@@ -1,5 +1,4 @@
 import { ReactNode, useContext, useEffect, useState } from 'react';
-import { useMap } from 'react-leaflet';
 
 import { getAsync, get } from './overpass_api';
 import { Relation, Way } from './osm_element';
@@ -67,7 +66,7 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
         }
     }
 
-    return <TreeNode id={id.toString()} initiallyOpen={true}
+    return <TreeNode id={id.toString()} initiallyOpen={false}
         onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
         { genLabel() }
         { relation?.wayGroups.map(w => <WayGroupConfig key={'wgc' + w.id} id={w.id} />) }

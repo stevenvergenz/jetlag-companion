@@ -1,4 +1,4 @@
-import { JSX, useState, ReactNode, MouseEventHandler } from 'react';
+import { JSX, useState, ReactNode, MouseEventHandler, MouseEvent } from 'react';
 
 type Props = {
     id: string,
@@ -10,22 +10,32 @@ type Props = {
 
 export function TreeNode({ id, children, initiallyOpen, onMouseEnter, onMouseLeave }: Props): JSX.Element {
     const [open, setOpen] = useState(initiallyOpen);
-
+    const [hover, setHover] = useState(false);
     function toggle() {
         setOpen(!open);
     }
 
-    return <div>
-        <div onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+    function mouseEnter(e: MouseEvent<Element>) {
+        setHover(true);
+        onMouseEnter && onMouseEnter(e);
+    }
+
+    function mouseLeave(e: MouseEvent<Element>) {
+        setHover(false);
+        onMouseLeave && onMouseLeave(e);
+    }
+
+    return <div className={hover ? 'bg-sky-100' : ''}>
+        <div onMouseEnter={onMouseEnter && mouseEnter} onMouseLeave={onMouseLeave && mouseLeave}>
             <button type='button' onClick={toggle}>
                 { !Array.isArray(children) ? '•' : open ? '⮟' : '⮞' }
                 &nbsp;
                 {Array.isArray(children) ? children[0] : children}
             </button>
         </div>
-        <ol className={`ps-4 ${open ? '' : 'hidden'}`}>
+        { open && <ol className='ps-4'>
             {Array.isArray(children) &&
                 children.slice(1).map((c, i) => <li key={`${id}-${i}`}>{c}</li>)}
-        </ol>
+        </ol>}
     </div>;
 }

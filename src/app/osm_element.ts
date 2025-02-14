@@ -1,18 +1,15 @@
 import EventEmitter from "events";
+
 import { OsmElement, OsmNode, OsmRelation, OsmWay, getAsync, get } from "./overpass_api";
 
 export class Element extends EventEmitter {
     static parentIds = new Map<number, number[]>();
 
     protected _data: OsmElement;
-    private _hovering: boolean;
-    private _inheritHovering: number;
 
     public constructor(data: OsmElement) {
         super();
         this._data = data;
-        this._hovering = false;
-        this._inheritHovering = 0;
     }
 
     public get id(): number {
@@ -24,28 +21,6 @@ export class Element extends EventEmitter {
             ?? this._data.tags?.['description'] 
             ?? this._data.tags?.['ref'] 
             ?? '<unspecified>';
-    }
-
-    public get hovering() { return this._inheritHovering > 0 || this._hovering; }
-    public set hovering(val: boolean) {
-        const wasHovering = this.hovering;
-        this._hovering = val;
-        if (this.hovering !== wasHovering) {
-            this.emit('hovering', this.hovering);
-        }
-    }
-
-    public registerInheritedHover() {
-        for (const pid of Element.parentIds.get(this.id) ?? []) {
-            const p = get(pid)
-            p.addListener('hovering', pHover => {
-                const wasHovering = this.hovering;
-                this._inheritHovering += pHover ? 1 : -1;
-                if (this.hovering !== wasHovering) {
-                    this.emit('hovering', this.hovering);
-                }
-            });
-        }
     }
 }
 

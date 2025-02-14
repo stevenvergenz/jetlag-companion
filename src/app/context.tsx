@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useState } from 'react';
+import { createContext, ReactNode, useState } from 'react';
 
 type Content = {
     hovering: number,
@@ -25,7 +25,8 @@ export function ContextProvider({ children }: { children: ReactNode }) {
     const [included, setIncluded] = useState([380107, 149149, 380109] as number[]);
     const [excluded, setExcluded] = useState([] as number[]);
 
-    return <Context.Provider value={{ hovering, setHovering, included, setIncluded, excluded, setExcluded }}>
+    return <Context.Provider value={
+        { hovering, setHovering, included, setIncluded, excluded, setExcluded }}>
         {children}
     </Context.Provider>;
 }

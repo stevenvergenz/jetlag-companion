@@ -1,10 +1,11 @@
-import { ReactNode, useState, useEffect, useContext } from 'react';
+import { ReactNode, useState, useEffect, useContext, useRef } from 'react';
 
 import { get, getAsync } from './overpass_api';
 import { Relation, Way } from './osm_element';
-import { LayerGroup, Polyline } from './lazy';
 import { Context } from './context';
-import { LatLngTuple, PathOptions } from 'leaflet';
+import { LatLngTuple, LatLngBounds, PathOptions,
+    FeatureGroup as FeatureGroupType, Polyline as PolylineType } from 'leaflet';
+import { FeatureGroup, Polyline, useMap } from 'react-leaflet';
 
 const EnabledStyle: PathOptions = {
     stroke: true,
@@ -23,11 +24,43 @@ const DisabledStyle: PathOptions = {
 };
 
 export function BoundaryLayer(): ReactNode {
-    const { included } = useContext(Context);
+    const { included, excluded } = useContext(Context);
+    const map = useMap();
+    const layerRef = useRef(null as FeatureGroupType | null);
 
-    return <LayerGroup>
+    useEffect(() => { recalcBounds(); }, [included, excluded, map, layerRef.current]);
+
+    async function recalcBounds() {
+        if (!map || !layerRef.current) { return; }
+        
+        console.log('Updating bounds');
+
+        const bounds = new LatLngBounds(
+            // loaded enabled relations
+            (await Promise.all(
+                included
+                    .filter(id => !excluded.includes(id))
+                    .map(id => getAsync<Relation>(id))
+            ))
+            // enabled ways
+            .map(r => r.ways)
+            .flat()
+            .filter(w => !excluded.includes(w.id) && !excluded.includes(-w.first.id))
+            // nodes
+            .map(w => w.nodes)
+            .flat()
+            // convert to LatLngTuple
+            .map(n => [n.lat, n.lon] as LatLngTuple)
+        );
+
+        if (bounds.isValid()) {
+            map.fitBounds(bounds);
+        }
+    }
+
+    return <FeatureGroup ref={layerRef} interactive={false}>
         {included.map(id => <RelationPath key={`rp${id}`} id={id} />)}
-    </LayerGroup>;
+    </FeatureGroup>;
 }
 
 type RelationPathProps = {
@@ -35,7 +68,6 @@ type RelationPathProps = {
 };
 export function RelationPath({ id }: RelationPathProps): ReactNode {
     const { excluded } = useContext(Context);
-
     const [relation, setRelation] = useState(undefined as Relation | undefined);
 
     useEffect(() => {

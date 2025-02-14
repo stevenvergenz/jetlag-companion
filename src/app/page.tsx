@@ -1,12 +1,11 @@
 'use client';
 import { ReactNode } from 'react';
-import { MapContainer, TileLayer } from './lazy';
+import { MapContainer, TileLayer, BoundaryLayer } from './lazy';
 import '../../node_modules/leaflet/dist/leaflet.css';
 
 import TopBar from './top_bar';
 import { SideBar } from './side_bar';
 import { ContextProvider } from './context';
-import { BoundaryLayer } from './boundary_path';
 
 export default function Page(): ReactNode {
     return <div className='w-full h-full flex flex-col'>
