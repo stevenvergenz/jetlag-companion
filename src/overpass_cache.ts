@@ -3,10 +3,8 @@ import { Id, pack, unpack, unreversed } from './id';
 import { Element, Node, Relation, Way, WayGroup } from './element';
 import { OsmElement, OsmElementType, requestAsync, requestTransport } from './overpass_api';
 
-type CleanLatLng = [number, number];
-
 type TransportDbItem = {
-    bounds: CleanLatLng[],
+    bounds: string,
     transportType: string,
     type: OsmElementType,
     id: number,
@@ -14,14 +12,9 @@ type TransportDbItem = {
 
 const memCacheId = new Map<Id, Element>();
 const memCacheTransport = new Map<string, Id[]>();
-let memCacheTransportBounds = [] as CleanLatLng[];
+let memCacheTransportBounds: string;
 const getPromises = new Map<Id, Promise<Element[]>>();
 const getCallbacks = new Map<Id, (e: Element[]) => void>();
-
-function boundsEq(a: CleanLatLng[], b: CleanLatLng[]): boolean {
-    return a.length === b.length && a.every((ai, i) =>
-        ai.every((aij, j) => aij === b[i][j]))
-}
 
 function dbReq<T>(req: IDBRequest<T>): Promise<T> {
     return new Promise((resolve, reject) => {
@@ -30,28 +23,23 @@ function dbReq<T>(req: IDBRequest<T>): Promise<T> {
     });
 }
 
-let _db: IDBDatabase | null = null;
 async function dbInit(): Promise<IDBDatabase> {
-    if (!_db) {
-        const req = indexedDB.open('overpass-cache', 1);
+    const req = indexedDB.open('overpass-cache', 1);
 
-        req.addEventListener('upgradeneeded', () => {
-            req.result.createObjectStore('elements', { keyPath: ['type', 'id'] });
-            req.result.createObjectStore('transport', { keyPath: ['bounds', 'transportType'] });
-        });
+    req.addEventListener('upgradeneeded', () => {
+        req.result.createObjectStore('elements', { keyPath: ['type', 'id'] });
 
-        _db = await dbReq(req);
-    }
-    return _db!;
+        const tstore = req.result.createObjectStore('transport', { keyPath: 'bounds'});
+        tstore.createIndex('bounds', 'bounds', { unique: false }); 
+    });
+
+    return await dbReq(req);
 }
 
-async function dbPut(es: Element[], bounds?: CleanLatLng[]): Promise<void> {
-    const db = await dbInit();
+async function dbPut(db: IDBDatabase, es: Element[], bounds?: string): Promise<void> {
     const tx = db.transaction(['elements', 'transport'], 'readwrite');
     const eStore = tx.objectStore('elements');
     const tStore = tx.objectStore('transport');
-
-    const cleanBounds = bounds?.map(b => b.slice(0, 2) as CleanLatLng) ;
 
     await Promise.all(es
         .map(async (e) => {
@@ -60,12 +48,12 @@ async function dbPut(es: Element[], bounds?: CleanLatLng[]): Promise<void> {
                 await dbReq(eStore.put(e.data));
             }
 
-            if (cleanBounds && e.data.tags && (
+            if (bounds && e.data.tags && (
                 e.data.tags.public_transport 
                 || ['route', 'route_master'].includes(e.data.tags.type)
             )) {
-                if (!boundsEq(memCacheTransportBounds, cleanBounds)) {
-                    memCacheTransportBounds = cleanBounds;
+                if (memCacheTransportBounds !== bounds) {
+                    memCacheTransportBounds = bounds;
                     memCacheTransport.clear();
                 }
 
@@ -74,7 +62,7 @@ async function dbPut(es: Element[], bounds?: CleanLatLng[]): Promise<void> {
                     [...(memCacheTransport.get(e.data.tags.public_transport!) ?? []), e.id]);
                     
                 await dbReq(tStore.put({
-                    bounds: cleanBounds, 
+                    bounds, 
                     transportType: e.data.tags?.public_transport ?? e.data.tags.type, 
                     type: e.data.type,
                     id: e.data.id,
@@ -87,11 +75,8 @@ async function dbPut(es: Element[], bounds?: CleanLatLng[]): Promise<void> {
     );
 }
 
-async function dbGetById(ids: Id[], tx?: IDBTransaction): Promise<Element[]> {
-    if (!tx) {
-        const db = await dbInit();
-        tx = db.transaction('elements', 'readonly');
-    }
+async function dbGetById(db: IDBDatabase, ids: Id[]): Promise<Element[]> {
+    const tx = db.transaction('elements', 'readonly');
     const store = tx.objectStore('elements');
 
     await Promise.all(ids
@@ -118,15 +103,12 @@ async function dbGetById(ids: Id[], tx?: IDBTransaction): Promise<Element[]> {
     return ids.map(id => memCacheId.get(id)).filter(e => e !== undefined) as Element[];
 }
 
-async function dbGetByTransportType(bounds: CleanLatLng[], transportType: string): Promise<Element[]> {
-    const db = await dbInit();
+async function dbGetByTransportType(db: IDBDatabase, bounds: string, transportType: string): Promise<Element[]> {
     const tx = db.transaction(['transport', 'elements'], 'readonly');
     const tStore = tx.objectStore('transport');
 
-    bounds = bounds?.map(b => [b[0], b[1]]);
-
     let ids = [] as Id[];
-    if (boundsEq(memCacheTransportBounds, bounds) && memCacheTransport.has(transportType)) {
+    if (memCacheTransportBounds === bounds && memCacheTransport.has(transportType)) {
         ids = memCacheTransport.get(transportType)!;
     }
     else {
@@ -134,7 +116,7 @@ async function dbGetByTransportType(bounds: CleanLatLng[], transportType: string
         ids = items.map(item => pack({ type: item.type, id: item.id }));
     }
 
-    return await dbGetById(ids, tx);
+    return await dbGetById(db, ids);
 }
 
 function getDeferred(id: Id): Promise<Element[]> {
@@ -144,7 +126,9 @@ function getDeferred(id: Id): Promise<Element[]> {
 }
 
 async function getInternalAsync(ids: Id[], { request }: { request: boolean }): Promise<Element[]> {
-    const dbEs = await dbGetById(ids);
+    const db = await dbInit();
+
+    const dbEs = await dbGetById(db, ids);
     const results = dbEs.reduce((map, e) => {
         map.set(e.id, e);
         return map;
@@ -158,7 +142,7 @@ async function getInternalAsync(ids: Id[], { request }: { request: boolean }): P
             getPromises.set(id, p);
         }
         reqEs = await p;
-        await dbPut(reqEs);
+        await dbPut(db, reqEs); 
     }
     else {
         for (const id of requestIds) {
@@ -166,6 +150,8 @@ async function getInternalAsync(ids: Id[], { request }: { request: boolean }): P
         }
         reqEs = (await Promise.all(requestIds.map(id => getPromises.get(id)!))).flat();
     }
+
+    db.close();
 
     for (const e of reqEs) {
         results.set(e.id, e);
@@ -208,13 +194,18 @@ export async function getByTransportTypeAsync(
     transportType: string, 
     { request } = { request: false },
 ): Promise<Element[]> {
-    const cleanBounds = bounds.map(b => b.slice(0, 2) as CleanLatLng);
-    const localEs = await dbGetByTransportType(cleanBounds, transportType);
+    const cleanBounds = bounds.flatMap(b => b.slice(0, 2)).map(n => n?.toFixed(4)).join(' ');
+    const db = await dbInit();
+
+    const localEs = await dbGetByTransportType(db, cleanBounds, transportType);
     if (!request || localEs.length > 0) {
+        db.close();
         return localEs;
     }
 
-    const reqEs = await requestTransport(bounds);
-    await dbPut(reqEs, cleanBounds);
+    const reqEs = await requestTransport(cleanBounds);
+    await dbPut(db, reqEs, cleanBounds);
+
+    db.close();
     return reqEs;
 }

@@ -1,4 +1,3 @@
-import { LatLngTuple } from 'leaflet';
 import { Element, Node, Relation, Way } from './element';
 import { Id, packFrom, unpack, unreversed } from './id';
 
@@ -129,9 +128,7 @@ export async function requestAsync(ids: Id[]): Promise<Element[]> {
     return ret;
 }
 
-export function requestTransport(poly: LatLngTuple[]): Promise<Element[]> {
-    const polyStr = poly.flatMap(ll => ll.slice(0, 2)).join(' ');
-    
+export function requestTransport(poly: string): Promise<Element[]> {
     // relation[public_transport=stop_area] describes a group of stops
     //   can have members "platform", "stop_position", "station", etc.
     // nw[public_transport=station] is many:many with stop_areas
@@ -139,7 +136,7 @@ export function requestTransport(poly: LatLngTuple[]): Promise<Element[]> {
     // relation[type=route] describes a route variant going to a platform
     // relation[type=route_master] describes a full route with all variants
     const q = `
-        nwr(poly:"${polyStr}") -> .all;
+        nwr(poly:"${poly}") -> .all;
         nw.all[public_transport=platform] -> .platforms;
         nw.all[public_transport=station] -> .stations;
         (
