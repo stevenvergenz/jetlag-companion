@@ -1,3 +1,5 @@
+import { LatLngTuple } from 'leaflet';
+
 import { OsmElement, OsmNode, OsmRelation, OsmWay, OsmWayGroup } from "./overpass_api";
 import { Id, pack, packFrom, unpack, reverse, unreversed } from './id';
 import { get } from './overpass_cache';
@@ -292,6 +294,15 @@ export class Way extends Element {
         return this.childIds
             .map(id => get(id))
             .filter(e => e !== undefined) as Node[];
+    }
+
+    public get center(): LatLngTuple {
+        const lats = this.children.map(n => n.lat);
+        const lons = this.children.map(n => n.lon);
+        return [
+            (Math.max(...lats) + Math.min(...lats)) / 2,
+            (Math.max(...lons) + Math.min(...lons)) / 2,
+        ] as LatLngTuple;
     }
 }
 

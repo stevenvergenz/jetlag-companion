@@ -45,7 +45,7 @@ class StationGroup {
             ?? this.stopAreas.values().next().value?.id
             ?? this.platforms.values().next().value?.id
             ?? 'unknown';
-        return `station-${repId}`;
+        return `sg-${repId}`;
     }
 
     public get name(): string {
@@ -181,7 +181,7 @@ export function StationMarkers(): ReactNode {
             modes.push(`Bus (${routeStr})`);
         }
 
-        return modes.map(m => <p>{m}</p>);
+        return modes.map(m => <p key={`${station.id}-${m}`}>{m}</p>);
     }
 
     function renderStation(station: StationGroup): ReactNode {

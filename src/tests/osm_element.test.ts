@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { setup, relation } from './test_common';
-import { Element } from '../element';
+import { Element, WayGroup } from '../element';
 import { Id, unreversed } from '../id';
 
 function checkChildren(e: Element, ids: Id[]) {
@@ -20,7 +20,8 @@ test('wayGroup append forward', () => {
     const r = relation(1, [3, 4]);
     checkChildren(r, ['wg:1/0']);
 
-    const wg = r.children[0];
+    const wg = r.children[0] as WayGroup;
+    expect(wg).toBeInstanceOf(WayGroup);
     checkParents(wg, [r.id]);
     checkChildren(wg, ['w:3', 'w:4']);
 
@@ -38,7 +39,8 @@ test('wayGroup prepend forward', () => {
     const r = relation(2, [5, 4]);
     checkChildren(r, ['wg:2/0']);
 
-    const wg = r.children[0];
+    const wg = r.children[0] as WayGroup;
+    expect(wg).toBeInstanceOf(WayGroup);
     checkParents(wg, [r.id]);
     checkChildren(wg, ['w:4', 'w:5']);
 
@@ -56,7 +58,8 @@ test('wayGroup append reverse', () => {
     const r = relation(3, [3, 400]);
     checkChildren(r, ['wg:3/0']);
 
-    const wg = r.children[0];
+    const wg = r.children[0] as WayGroup;
+    expect(wg).toBeInstanceOf(WayGroup);
     checkParents(wg, [r.id]);
     checkChildren(wg, ['w:3', '-w:400']);
 
@@ -74,7 +77,8 @@ test('wayGroup prepend reverse', () => {
     const r = relation(4, [5, 400]);
     checkChildren(r, ['wg:4/0']);
 
-    const wg = r.children[0];
+    const wg = r.children[0] as WayGroup;
+    expect(wg).toBeInstanceOf(WayGroup);
     checkParents(wg, [r.id]);
     checkChildren(wg, ['-w:400', 'w:5']);
 
@@ -92,7 +96,8 @@ test('wayGroup bridge append forward', () => {
     const r = relation(5, [3, 5, 4]);
     checkChildren(r, ['wg:5/0']);
 
-    const wg = r.children[0];
+    const wg = r.children[0] as WayGroup;
+    expect(wg).toBeInstanceOf(WayGroup);
     checkParents(wg, [r.id]);
     checkChildren(wg, ['w:3', 'w:4', 'w:5']);
 
@@ -110,7 +115,8 @@ test('wayGroup bridge prepend forward', () => {
     const r = relation(6, [5, 3, 4]);
     checkChildren(r, ['wg:6/0']);
 
-    const wg = r.children[0];
+    const wg = r.children[0] as WayGroup;
+    expect(wg).toBeInstanceOf(WayGroup);
     checkParents(wg, [r.id]);
     checkChildren(wg, ['w:3', 'w:4', 'w:5']);
 
@@ -128,7 +134,8 @@ test('wayGroup bridge append reverse', () => {
     const r = relation(7, [3, 700, 400]);
     checkChildren(r, ['wg:7/0']);
     
-    const wg = r.children[0];
+    const wg = r.children[0] as WayGroup;
+    expect(wg).toBeInstanceOf(WayGroup);
     checkParents(wg, [r.id]);
     checkChildren(wg, ['w:3', '-w:400', '-w:700']);
 
@@ -146,7 +153,8 @@ test('wayGroup bridge prepend reverse', () => {
     const r = relation(8, [5, 6, 400]);
     checkChildren(r, ['wg:8/0']);
     
-    const wg = r.children[0];
+    const wg = r.children[0] as WayGroup;
+    expect(wg).toBeInstanceOf(WayGroup);
     checkParents(wg, [r.id]);
     checkChildren(wg, ['-w:6', '-w:400', 'w:5']);
 

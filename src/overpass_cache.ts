@@ -12,7 +12,7 @@ type TransportDbItem = {
     id: number,
 };
 
-const memCacheId = new Map<Id, Element>();
+export const memCacheId = new Map<Id, Element>();
 let memCacheTransport: Set<Id> | undefined;
 let memCacheTransportBounds: string | undefined;
 const getPromises = new Map<Id, Promise<Element[]>>();

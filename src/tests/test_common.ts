@@ -1,6 +1,6 @@
 import { LatLngTuple } from 'leaflet';
-import { Relation, Way, Node, WayGroup } from '../element';
-import { cache } from '../overpass_api';
+import { Relation, Way, Node, HierarchyHelper } from '../element';
+import { memCacheId } from '../overpass_cache';
 import { pack } from '../id';
 
 
@@ -20,8 +20,8 @@ import { pack } from '../id';
  * ```
  */
 export function setup(): void {
-    cache.clear();
-    WayGroup.reset();
+    memCacheId.clear();
+    HierarchyHelper.reset();
 
     layout([    1,    2   ], [-1,  2], [2, 0]);
     layout([ 3, 4, 5, 6, 7], [-2,  1], [1, 0]);
@@ -52,7 +52,7 @@ export function relation(id: number, members: number[]): Relation {
         id,
         members: members.map(id => ({ type: 'way', ref: id, role: 'forward' })),
     });
-    cache.set(r.id, r);
+    memCacheId.set(r.id, r);
     return r;
 }
 
@@ -62,7 +62,7 @@ export function way(id: number, nodes: number[]): Way {
         id,
         nodes,
     });
-    cache.set(w.id, w);
+    memCacheId.set(w.id, w);
     return w;
 }
 
@@ -72,18 +72,18 @@ export function node(id: number, lat: number, lon: number): Node {
         id,
         lat, lon,
     });
-    cache.set(n.id, n);
+    memCacheId.set(n.id, n);
     return n;
 }
 
 export function relations(...ids: number[]): Relation[] {
-    return ids.map(id => cache.get(pack({ type: 'relation', id })) as Relation);
+    return ids.map(id => memCacheId.get(pack({ type: 'relation', id })) as Relation);
 }
 
 export function ways(...ids: number[]): Way[] {
-    return ids.map(id => cache.get(pack({ type: 'way', id })) as Way);
+    return ids.map(id => memCacheId.get(pack({ type: 'way', id })) as Way);
 }
 
 export function nodes(...ids: number[]): Node[] {
-    return ids.map(id => cache.get(pack({ type: 'node', id })) as Node);
+    return ids.map(id => memCacheId.get(pack({ type: 'node', id })) as Node);
 }
