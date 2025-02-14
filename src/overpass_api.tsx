@@ -3,7 +3,7 @@ import { Element, Node, Relation, Way } from './osm_element';
 const endpoint = 'https://overpass-api.de/api/interpreter';
 
 const cache = new Map<number, Element>();
-const promises = new Map<number, Promise<Element>>();
+const promises = new Map<number, Promise<Element[]>>();
 
 type OsmQueryResult = {
     version: string,
@@ -42,11 +42,15 @@ export type OsmNode = OsmCommon & {
 
 export type OsmElement = OsmRelation | OsmWay | OsmNode;
 
-async function getAsyncInternal<T extends Element>(id: number): Promise<T> {
-    if (!cache.has(id)) {
+const QueryLimit = 2 * 1024 * 1024; // 2MB
+
+async function getAsyncInternal<T extends Element>(ids: number[], recurse = false): Promise<T[]> {
+    const queryIds = ids.filter(id => !cache.has(id));
+    if (queryIds.length > 0) {
+        const recurseQuery = recurse ? '>>;' : '';
         const res = await fetch(endpoint, {
             method: 'POST',
-            body: `[out:json]; nwr(${id}); >>; out;`,
+            body: `[maxsize:${QueryLimit}][out:json]; nwr(id:${queryIds.join(',')}); ${recurseQuery} out;`,
         });
         const body = await res.json() as OsmQueryResult;
         for (const e of body.elements) {
@@ -63,30 +67,35 @@ async function getAsyncInternal<T extends Element>(id: number): Promise<T> {
             }
         }
     }
-    if (!cache.has(id)) {
-        throw new Error(`Element not found: ${id}`);
-    } else {
-        return cache.get(id) as T;
-    }
+    
+    return ids.map(id => cache.get(id) as T);
 }
 
-export function getAsync<T extends Element>(id: number): Promise<T> {
-    if (promises.has(id)) {
-        return promises.get(id) as Promise<T>;
-    } else {
-        const p = getAsyncInternal(id)
+export function getAsync<T extends Element>(ids: number[], recurse = false): Promise<T[]> {
+    const queryIds = ids.filter(id => !cache.has(id) || recurse && !cache.get(id)!.complete);
+    if (queryIds.length > 0) {
+        const p = getAsyncInternal(queryIds, recurse)
             .finally(() => {
-                promises.delete(id);
+                for (const id of queryIds) {
+                    promises.delete(id);
+                }
             });
-        promises.set(id, p);
-        return p as Promise<T>;
+
+        for (const id of queryIds) {
+            promises.set(id, p);
+        }
     }
+
+    return Promise.all(ids.map(async (id) => {
+        if (promises.has(id)) {
+            return (await promises.get(id)!).find(e => e.id === id) as T;
+        }
+        else {
+            return cache.get(id) as T;
+        }
+    }));
 }
 
-export function get<T extends Element>(id: number): T {
-    if (!cache.has(id)) {
-        throw new Error(`Element not found: ${id}`);
-    } else {
-        return cache.get(id) as T;
-    }
+export function get<T extends Element>(id: number): T | undefined {
+    return cache.get(id) as T | undefined;
 }

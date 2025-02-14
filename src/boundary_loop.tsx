@@ -60,7 +60,6 @@ type Intersection = {
 
 /** Maximum distance in meters between adjacent ways to be merged */
 const MaxDistanceMeters = 500;
-const MaxDistanceDeg = MaxDistanceMeters / 111320;
 
 const MaxDot = -0.5;
 
@@ -68,7 +67,7 @@ async function generateBoundaryLoopPath(
     included: number[], excluded: number[], map: LMap
 ): Promise<LatLngTuple[] | undefined> {
     const ids = included.filter(id => !excluded.includes(id));
-    const rs = await Promise.all(ids.map(id => getAsync<Relation>(id)));
+    const rs = await getAsync<Relation>(ids);
     return mergeRelations(rs);
 
     function mergeRelations(relations: Relation[]): LatLngTuple[] | undefined {
@@ -242,7 +241,7 @@ async function generateBoundaryLoopPath(
                 const dot = Vec2.dot(ref.vec, other.vec);
     
                 // closer points are linearly better than farther points up to the max distance
-                const ptScore = Math.max(0, 1 - dist / MaxDistanceDeg);
+                const ptScore = Math.max(0, 1 - dist / MaxDistanceMeters);
                 // more opposing vectors are linearly better than more perpendicular/parallel vectors
                 const vecScore = Math.max(0, (dot - MaxDot) / (-1 - MaxDot));
                 // distance is more important than orientation
@@ -292,7 +291,7 @@ async function generateBoundaryLoopPath(
             return calcWayGroupPath(way.next);
         }
     
-        let path = way.nodes.map(n => [n.lat, n.lon] as LatLngTuple);
+        let path = way.children.map(n => [n.lat, n.lon] as LatLngTuple);
         if (way.next) {
             path = path.concat(calcWayGroupPath(way.next).slice(1));
         }
@@ -312,7 +311,10 @@ export function BoundaryLoop(): ReactNode {
                 if (!p) {
                     console.log('Boundary path not closed');
                     return;
+                } else {
+                    console.log(`Boundary path closed with ${p.length} points`);
                 }
+
                 const innerBounds = new LatLngBounds(p);
                 const outerBounds = innerBounds.pad(1);
                 setPath([

@@ -1,7 +1,11 @@
 import { OsmElement, OsmNode, OsmRelation, OsmWay, get } from "./overpass_api";
 
-export class Element {
+export abstract class Element {
     static parentIds = new Map<number, number[]>();
+
+    public abstract get parents(): Element[];
+
+    public abstract get children(): Element[];
 
     protected _data: OsmElement;
 
@@ -19,6 +23,14 @@ export class Element {
             ?? this._data.tags?.['ref'] 
             ?? '<unspecified>';
     }
+
+    public get complete(): boolean {
+        return this.children.every(c => c?.complete);
+    }
+
+    public get completeIds(): number[] {
+        return [this.id, ...this.children.flatMap(c => c?.completeIds)];
+    }
 }
 
 export class Relation extends Element {
@@ -32,15 +44,19 @@ export class Relation extends Element {
 
     public get data() { return this._data as OsmRelation; }
 
-    public get ways(): Way[] {
+    public get parents() {
+        return [];
+    }
+
+    public get children(): Way[] {
         return this.data.members
             .map((m) => m.ref)
             .filter((id, i, arr) => !arr.slice(0, i).includes(id))
-            .map((id) => get(id));
+            .map((id) => get(id) as Way);
     }
 
     public get wayGroups(): Way[] {
-        return this.ways
+        return this.children
             .filter((w) => w.previous === undefined);
     }
 }
@@ -61,16 +77,16 @@ export class Way extends Element {
             Element.parentIds.set(n, [...(Element.parentIds.get(n) ?? []), this.id]);
         }
 
-        Way.firstNodes.set(this.nodes[0].id, this);
-        Way.lastNodes.set(this.nodes[this.nodes.length - 1].id, this);
+        Way.firstNodes.set(this.children[0].id, this);
+        Way.lastNodes.set(this.children[this.children.length - 1].id, this);
 
-        let other = Way.lastNodes.get(this.nodes[0].id);
+        let other = Way.lastNodes.get(this.children[0].id);
         if (other) {
             other.next = this;
             this.previous = other;
         }
 
-        other = Way.firstNodes.get(this.nodes[this.nodes.length - 1].id);
+        other = Way.firstNodes.get(this.children[this.children.length - 1].id);
         if (other) {
             other.previous = this;
             this.next = other;
@@ -79,9 +95,13 @@ export class Way extends Element {
 
     public get data() { return this._data as OsmWay; }
 
-    public get nodes(): Node[] {
+    public get parents(): Relation[] {
+        return Element.parentIds.get(this.id)?.map(pid => get(pid) as Relation) ?? [];
+    }
+
+    public get children(): Node[] {
         return this.data.nodes
-            .map(n => get(n));
+            .map(n => get(n) as Node);
     }
 
     public get first(): Way {
@@ -101,10 +121,6 @@ export class Way extends Element {
         }
         return following;
     }
-
-    public get parents(): Relation[] {
-        return Element.parentIds.get(this.id)?.map(pid => get(pid)) ?? [];
-    }
 }
 
 export class Node extends Element {
@@ -114,10 +130,14 @@ export class Node extends Element {
 
     public get data() { return this._data as OsmNode; }
 
+    public get parents(): Way[] {
+        return Element.parentIds.get(this.id)?.map(pid => get(pid) as Way) ?? [];
+    }
+
+    public get children() {
+        return [];
+    }
+
     public get lat() { return this.data.lat; }
     public get lon() { return this.data.lon; }
-
-    public get parents(): Way[] {
-        return Element.parentIds.get(this.id)?.map(pid => get(pid)) ?? [];
-    }
 }

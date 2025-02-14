@@ -34,17 +34,13 @@ export function BoundaryLayer(): ReactNode {
     
             const bounds = new LatLngBounds(
                 // loaded enabled relations
-                (await Promise.all(
-                    included
-                        .filter(id => !excluded.includes(id))
-                        .map(id => getAsync<Relation>(id))
-                ))
+                (await getAsync<Relation>(included.filter(id => !excluded.includes(id))))
                 // enabled ways
-                .map(r => r.ways)
+                .map(r => r.children)
                 .flat()
                 .filter(w => !excluded.includes(w.id) && !excluded.includes(-w.first.id))
                 // nodes
-                .map(w => w.nodes)
+                .map(w => w.children)
                 .flat()
                 // convert to LatLngTuple
                 .map(n => [n.lat, n.lon] as LatLngTuple)
@@ -71,14 +67,14 @@ export function RelationPath({ id }: RelationPathProps): ReactNode {
 
     useEffect(() => {
         if (!relation || relation.id !== id) {
-            getAsync<Relation>(id).then((r) => setRelation(r));
+            getAsync<Relation>([id]).then(([r]) => setRelation(r));
         }
     }, [id, relation]);
 
     return <>
         { relation
             && !excluded.includes(relation.id) 
-            && relation.ways.map(w => <WayPath key={`wp${w.id}`} id={w.id} />) }
+            && relation.children.map(w => <WayPath key={`wp${w.id}`} id={w.id} />) }
     </>;
 }
 
@@ -116,7 +112,7 @@ export function WayPath({ id }: WayPathProps): ReactNode {
     
     if (way) {
         return <Polyline
-            positions={way.nodes.map(n => [n.lat, n.lon] as LatLngTuple) ?? []}
+            positions={way.children.map(n => [n.lat, n.lon] as LatLngTuple) ?? []}
             pathOptions={computeStyle()}
         />;
     }
