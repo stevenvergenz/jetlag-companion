@@ -14,17 +14,22 @@ export function BoundaryConfig(): ReactNode {
         },
         save,
     } = useContext(Context);
-    const [newId, setNewId] = useState(0);
+    const [newId, setNewId] = useState('');
 
     function addRelation() {
         if (!newId) {
             return;
         }
 
-        const id = pack({ type: 'relation', id: newId });
+        const numberId = parseInt(newId, 10);
+        if (isNaN(numberId)) {
+            return;
+        }
+
+        const id = pack({ type: 'relation', id: numberId });
         if (!included.has(id)) {
             setIncluded(new Set([...included, id]));
-            setNewId(0);
+            setNewId('');
         }
     }
 
@@ -34,7 +39,7 @@ export function BoundaryConfig(): ReactNode {
             <span className='font-bold'>Settings</span>
             <div>
                 <input type='number' min='0' placeholder='OSM Relation ID'
-                    value={newId} onChange={e => setNewId(e.target.valueAsNumber)}/>
+                    value={newId} onChange={e => setNewId(e.target.value)}/>
                 <button type='button' onClick={addRelation}>Add</button>
             </div>
             <div>

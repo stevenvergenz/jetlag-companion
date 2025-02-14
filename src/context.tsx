@@ -70,7 +70,7 @@ export const Context = createContext(dummyContent);
 export function ContextProvider({ children }: { children: ReactNode }) {
     const [included, setIncluded] = useState(config.boundary.included);
     const [excluded, setExcluded] = useState(config.boundary.excluded);
-    const [editingBoundary, setEditingBoundary] = useState(false);
+    const [editingBoundary, setEditingBoundary] = useState(config.boundary.included.size === 0);
     const [boundary, setBoundary] = useState(undefined as LatLngTuple[] | undefined);
     const [hovering, setHovering] = useState('');
     const [boundaryErrors, setBoundaryErrors] = useState(new Set<Id>());
@@ -95,9 +95,21 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
         hovering, setHovering,
         save: () => {
+            const newInclude = new Set(included);
+            const newExclude = new Set(excluded);
+            for (const id of included) {
+                if (excluded.has(id)) {
+                    newInclude.delete(id);
+                    newExclude.delete(id);
+                }
+            }
+            setIncluded(newInclude);
+            setExcluded(newExclude);
+
             save({
                 boundary: {
-                    included, excluded,
+                    included: newInclude,
+                    excluded: newExclude,
                 },
                 stations: {
                     show: showStations,
@@ -110,6 +122,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         async function helper() {
+            console.log('Fetching boundaries');
             const relIds = [...included].filter(context.boundary.notExcluded);
             const relations = await getAsync(relIds, { request: true }) as Relation[];
 
