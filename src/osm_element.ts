@@ -1,125 +1,73 @@
 import { OsmElement, OsmNode, OsmRelation, OsmWay, OsmWayGroup, get } from "./overpass_api";
-import { Id, pack, unpack, reverse, unreversed } from './id';
+import { Id, pack, packFrom, unpack, reverse, unreversed } from './id';
 
-export abstract class Element {
-
-    public readonly id: Id;
-
-    protected readonly _data?: OsmElement;
-    public abstract get data(): OsmElement;
-
-    public parentIds = new Set<Id>();
-    public get parents(): Element[] {
-        return [...this.parentIds]
-            .map(id => get(id))
-            .filter(e => e !== undefined);
-    }
-
-    public childIds = [] as Id[];
-    public get children(): Element[] {
-        return this.childIds
-            .map(id => get(id))
-            .filter(e => e !== undefined);
-    }
-
-    public get name(): string {
-        return this._data?.tags?.['name'] 
-            ?? this._data?.tags?.['description'] 
-            ?? this._data?.tags?.['ref'] 
-            ?? '<unspecified>';
-    }
-
-    public get complete(): boolean {
-        return this.children.every(c => c?.complete);
-    }
-
-    public get completeIds(): Id[] {
-        return [this.id, ...this.children.flatMap(c => c?.completeIds)];
-    }
-
-    public constructor(id: Id, data?: OsmElement) {
-        this.id = id;
-        this._data = data;
-    }
-
-    public addChildUnique(id: Id) {
-        if (id && !this.childIds.includes(id)) {
-            this.childIds.push(id);
-        }
-    }
-}
-
-export class Relation extends Element {
-    public readonly wayGroups = new Map<Id, WayGroup>();
-
-    public constructor(id: Id, data: OsmRelation) {
-        super(id, data);
-
-        for (const w of this.data.members.filter(m => m.type === 'way')) {
-            const memberId = pack({ type: w.type, id: w.ref });
-            WayGroup.setInterest(memberId, this);
-        }
-    }
-
-    public get data() {
-        return this._data as OsmRelation;
-    }
-}
-
-export class WayGroup extends Element {
-    private static nextOffsets: { [id: Id]: number } = {};
+export class HierarchyHelper {
     private static interests = new Map<Id, Set<Id>>();
     private static knownIds = new Set<Id>();
 
     public static reset() {
-        this.nextOffsets = {};
         this.interests = new Map();
         this.knownIds = new Set();
     }
 
-    public static setInterest(wayId: Id, relation: Relation) {
-        if (this.knownIds.has(wayId)) {
-            this.fulfillInterest(get(wayId) as Way, relation);
+    public static setInterest(childId: Id, parent: Element) {
+        if (this.knownIds.has(childId)) {
+            this.fulfillInterest(get(childId)!, parent);
         }
-        else if (this.interests.has(wayId)) {
-            this.interests.get(wayId)!.add(relation.id);
+        else if (this.interests.has(childId)) {
+            this.interests.get(childId)!.add(parent.id);
         }
         else {
-            this.interests.set(wayId, new Set([relation.id]));
+            this.interests.set(childId, new Set([parent.id]));
         }
     }
 
-    public static fulfillInterests(way: Way) {
-        this.knownIds.add(way.id);
-        for (const rid of this.interests.get(way.id) ?? []) {
-            const r = get(rid) as Relation;
-            this.fulfillInterest(way, r);
+    public static fulfillInterests(child: Element) {
+        this.knownIds.add(child.id);
+        for (const rid of this.interests.get(child.id) ?? []) {
+            const r = get(rid)!;
+            this.fulfillInterest(child, r);
         }
-        this.interests.delete(way.id);
+        this.interests.delete(child.id);
     }
 
-    private static fulfillInterest(way: Way, relation: Relation) {
+    private static fulfillInterest(child: Element, parent: Element) {
+        if (child instanceof Way && parent instanceof Relation) {
+            this.fulfillInterestRelationWay(child, parent);
+        }
+        else {
+            child.parentIds.add(parent.id);
+        }
+    }
+
+    private static fulfillInterestRelationWay(child: Way, parent: Relation) {
+        parent.wayGroups ??= new Map();
+
         /** All roles for the fulfilled way */
-        const roles = new Set(relation.data.members
-            .filter(m => pack({ type: m.type, id: m.ref }) === way.id)
+        const roles = new Set(parent.data.members
+            .filter(m => pack({ type: m.type, id: m.ref }) === child.id)
             .map(m => m.role));
         if (roles.size === 0) {
             return;
         }
 
-        const wayEnds = [way.childIds[0], way.childIds[way.childIds.length - 1]];
+        if (!parent.wayGroups) {
+            console.error(parent);
+        }
+
+        const wayEnds = [child.childIds[0], child.childIds[child.childIds.length - 1]];
 
         for (const role of roles) {
             /** The list of known way groups that successfully added the fulfilled way */
-            const added = [...relation.wayGroups.values()]
-                .filter(e => e.role === role && e.add(way));
+            const added = [...parent.wayGroups.values()]
+                .filter(e => e.role === role && e.add(child));
 
             // no existing way group will take it, add a new one
             if (added.length === 0) {
-                const wg = new WayGroup(relation.id, role, way);
-                relation.wayGroups.set(wg.id, wg);
-                relation.addChildUnique(wg.id);
-                way.parentIds.add(wg.id);
+                const wg = new WayGroup(parent.id, role, child);
+                parent.wayGroups.set(wg.id, wg);
+                parent.addChildUnique(wg.id);
+                child.parentIds.add(wg.id);
                 continue;
             }
 
@@ -170,8 +118,8 @@ export class WayGroup extends Element {
                     continue;
                 }
 
-                relation.wayGroups.delete(junior.id);
-                relation.childIds = relation.childIds.filter(id => id !== junior.id);
+                parent.wayGroups.delete(junior.id);
+                parent.childIds = parent.childIds.filter(id => id !== junior.id);
                 
                 for (const way of junior.children) {
                     way.parentIds.delete(junior.id);
@@ -180,6 +128,85 @@ export class WayGroup extends Element {
             }
         }
     }
+}
+
+export abstract class Element {
+    public readonly id: Id;
+
+    protected readonly _data: OsmElement;
+    public get data(): OsmElement {
+        return this._data;
+    }
+
+    public parentIds = new Set<Id>();
+    public get parents(): Element[] {
+        return [...this.parentIds]
+            .map(id => get(id))
+            .filter(e => e !== undefined);
+    }
+
+    public childIds = [] as Id[];
+    public get children(): Element[] {
+        return this.childIds
+            .map(id => get(id))
+            .filter(e => e !== undefined);
+    }
+
+    public get name(): string {
+        return this._data?.tags?.['name'] 
+            ?? this._data?.tags?.['description'] 
+            ?? this._data?.tags?.['ref'] 
+            ?? '<unspecified>';
+    }
+
+    public get complete(): boolean {
+        return this.children.every(c => c?.complete);
+    }
+
+    public get completeIds(): Id[] {
+        return [this.id, ...this.children.flatMap(c => c?.completeIds)];
+    }
+
+    public constructor(id: Id, data: OsmElement) {
+        this.id = id;
+        this._data = data;
+
+        if (data.type === 'relation') {
+            for (const id of data.members.map(m => packFrom(m))) {
+                HierarchyHelper.setInterest(id, this);
+            }
+        }
+        if (data.type === 'way') {
+            for (const id of data.nodes.map(n => pack({ type: 'node', id: n }))) {
+                this.childIds.push(id);
+                HierarchyHelper.setInterest(id, this);
+            }
+        }
+
+        HierarchyHelper.fulfillInterests(this);
+    }
+
+    public addChildUnique(id: Id) {
+        if (id && !this.childIds.includes(id)) {
+            this.childIds.push(id);
+        }
+    }
+}
+
+export class Relation extends Element {
+    public wayGroups = new Map<Id, WayGroup>();
+
+    public constructor(id: Id, data: OsmRelation) {
+        super(id, data);
+    }
+
+    public get data() {
+        return this._data as OsmRelation;
+    }
+}
+
+export class WayGroup extends Element {
+    private static nextOffsets: { [id: Id]: number } = {};
 
     public readonly role: string;
     public startsWithNode: Id;
@@ -259,22 +286,8 @@ export class Way extends Element {
 
         for (const n of this.data.nodes) {
             const nodeId = pack({ type: 'node', id: n });
-            const node = get(nodeId);
-            if (node) {
-                node.parentIds.add(this.id);
-            }
-            else if (Node.parentIds.has(nodeId)){
-                const parents = Node.parentIds.get(nodeId)!;
-                parents.add(this.id);
-            }
-            else {
-                Node.parentIds.set(nodeId, new Set([id]));
-            }
-            
-            this.addChildUnique(nodeId);
+            HierarchyHelper.setInterest(nodeId, this);
         }
-
-        WayGroup.fulfillInterests(this);
     }
 
     public get data() { return this._data as OsmWay; }
@@ -287,12 +300,8 @@ export class Way extends Element {
 }
 
 export class Node extends Element {
-    public static parentIds = new Map<Id, Set<Id>>();
-
     public constructor(id: Id, data: OsmNode) {
         super(id, data);
-        this.parentIds = Node.parentIds.get(id) ?? new Set();
-        Node.parentIds.delete(id);
     }
 
     public get data() {
@@ -312,13 +321,13 @@ export class Node extends Element {
         return this.data.tags?.highway === 'bus_stop';
     }
     public get busRoutes(): Relation[] {
-        const ids = this.parents
-            .filter(e => e instanceof Relation && e.data.tags?.type === 'route')
-            .flatMap(e => [...e.parentIds])
-            .reduce((acc, id) => {
-                acc.add(id);
-                return acc;
-            }, new Set<Id>());
-        return [...ids].map(id => get(id) as Relation);
+        return this.parents
+            .filter(e => e instanceof Relation && e.data.tags?.type === 'route') as Relation[];
+            // .flatMap(e => [...e.parentIds])
+            // .reduce((acc, id) => {
+            //     acc.add(id);
+            //     return acc;
+            // }, new Set<Id>());
+        //return [...ids].map(id => get(id) as Relation);
     }
 }

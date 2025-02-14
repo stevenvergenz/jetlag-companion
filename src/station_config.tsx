@@ -68,7 +68,7 @@ export function StationMarkers(): ReactNode {
             modes.push('Rail');
         }
         if (n.isBusStop) {
-            modes.push('Bus');
+            modes.push(`Bus (${n.busRoutes.map(r => r.data.tags?.ref).join('/')})`);
         }
         return modes.join(', ');
     }
@@ -79,8 +79,7 @@ export function StationMarkers(): ReactNode {
                 <CircleMarker key={n.id} center={[n.lat, n.lon]} radius={5} pathOptions={StationStyle}>
                     <Tooltip>
                         <p className='font-bold'>{n.name}</p>
-                        <span>{modeString(n)}
-                        </span>
+                        <p>{modeString(n)}</p>
                     </Tooltip>
                 </CircleMarker>
             )}

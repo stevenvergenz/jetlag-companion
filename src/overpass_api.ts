@@ -167,8 +167,8 @@ export async function requestStations(
         `;
         const busQuery = `
             node.all[highway='bus_stop'] -> .stops;
-            relation.stops(bn)[type='route'][route='bus'] -> .variants;
-            relation.variants(br)[type='route_master'][route_master='bus'] -> .routes;
+            relation(bn.stops)[type='route'][route='bus'] -> .variants;
+            relation(br.variants)[type='route_master'][route_master='bus'] -> .routes;
             (
                 .result;
                 .stops;
@@ -189,7 +189,8 @@ export async function requestStations(
     }
 
     const nodes = ids
-        .map(id => get(id) as Node)
-        .filter(n => !n.isBusStop || n.busRoutes.length >= busTransferThreshold);
-    return nodes;
+        .map(id => get(id) as Node);
+    return nodes.filter(n =>
+            useTransitStations && n.isStation
+            || n.isBusStop && n.busRoutes.length >= busTransferThreshold);
 }

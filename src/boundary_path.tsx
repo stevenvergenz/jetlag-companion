@@ -91,9 +91,8 @@ export function WayGroupPath({ wayGroup }: WayGroupPathProps): ReactNode {
     const { boundary: { notExcluded } } = useContext(Context);
 
     return wayGroup.children
-        .filter(notExcluded)
+        .filter(e => e instanceof Way && notExcluded(e))
         .map(w => <WayPath key={w.id} id={w.id} />);
-    
 }
 
 type WayPathProps = {
