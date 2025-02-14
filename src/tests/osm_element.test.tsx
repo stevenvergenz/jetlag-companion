@@ -29,7 +29,7 @@ function relation(id: number, members: number[]): Relation {
     });
 }
 
-test('wayGroup append', () => {
+test('wayGroup append forward', () => {
     setup();
     const r = relation(1, [1, 2]);
     expect(r.wayGroups.size).toBe(1);
@@ -38,9 +38,9 @@ test('wayGroup append', () => {
     expect(r.children[0].endsWithNode).toBe('n:3');
 });
 
-test('wayGroup prepend', () => {
+test('wayGroup prepend forward', () => {
     setup();
-    const r = relation(1, [2, 1]);
+    const r = relation(2, [2, 1]);
     expect(r.wayGroups.size).toBe(1);
     expect(r.children[0].childIds).toMatchObject(['w:1', 'w:2']);
     expect(r.children[0].startsWithNode).toBe('n:1');
@@ -49,7 +49,7 @@ test('wayGroup prepend', () => {
 
 test('wayGroup append reverse', () => {
     setup();
-    const r = relation(1, [1, 5]);
+    const r = relation(3, [1, 5]);
     expect(r.wayGroups.size).toBe(1);
     expect(r.children[0].childIds).toMatchObject(['w:1', '-w:5']);
     expect(r.children[0].startsWithNode).toBe('n:1');
@@ -58,17 +58,45 @@ test('wayGroup append reverse', () => {
 
 test('wayGroup prepend reverse', () => {
     setup();
-    const r = relation(1, [2, 6]);
+    const r = relation(4, [2, 6]);
     expect(r.wayGroups.size).toBe(1);
     expect(r.children[0].childIds).toMatchObject(['-w:6', 'w:2']);
     expect(r.children[0].startsWithNode).toBe('n:1');
     expect(r.children[0].endsWithNode).toBe('n:3');
 });
 
-test('wayGroup bridge', () => {
+test('wayGroup bridge append forward', () => {
     setup();
-    const r = relation(1, [1, 3, 2]);
+    const r = relation(5, [1, 3, 2]);
     expect(r.wayGroups.size).toBe(1);
+    expect(r.children[0].childIds).toMatchObject(['w:1', 'w:2', 'w:3']);
     expect(r.children[0].startsWithNode).toBe('n:1');
     expect(r.children[0].endsWithNode).toBe('n:4');
-})
+});
+
+test('wayGroup bridge prepend forward', () => {
+    setup();
+    const r = relation(5, [3, 1, 2]);
+    expect(r.wayGroups.size).toBe(1);
+    expect(r.children[0].childIds).toMatchObject(['w:1', 'w:2', 'w:3']);
+    expect(r.children[0].startsWithNode).toBe('n:1');
+    expect(r.children[0].endsWithNode).toBe('n:4');
+});
+
+test('wayGroup bridge append reverse', () => {
+    setup();
+    const r = relation(5, [1, 4, 5]);
+    expect(r.wayGroups.size).toBe(1);
+    expect(r.children[0].childIds).toMatchObject(['w:1', '-w:5', '-w:4']);
+    expect(r.children[0].startsWithNode).toBe('n:1');
+    expect(r.children[0].endsWithNode).toBe('n:4');
+});
+
+test('wayGroup bridge prepend reverse', () => {
+    setup();
+    const r = relation(5, [3, 6, 5]);
+    expect(r.wayGroups.size).toBe(1);
+    expect(r.children[0].childIds).toMatchObject(['-w:6', '-w:5', 'w:3']);
+    expect(r.children[0].startsWithNode).toBe('n:1');
+    expect(r.children[0].endsWithNode).toBe('n:4');
+});

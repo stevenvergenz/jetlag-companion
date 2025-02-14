@@ -145,7 +145,7 @@ export function WayGroupConfig({ wayGroup }: WayGroupConfigProps): ReactNode {
             <input type='checkbox' disabled={!inheritEnabled}
                 checked={enabled} onChange={e => setEnabled(e.target.checked)} />
             &nbsp;
-            {wayGroup.name}
+            {wayGroup.name} ({wayGroup.id})
         </label>
         { wayGroup.children.map(w => <WayConfig key={`c${w.id}`} id={w.id} />) }
     </TreeNode>;

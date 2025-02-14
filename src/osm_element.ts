@@ -1,5 +1,5 @@
 import { OsmElement, OsmNode, OsmRelation, OsmWay, get } from "./overpass_api";
-import { Id, pack, unpack, reverse, unreversed, isReversed } from './id';
+import { Id, pack, unpack, reverse, unreversed } from './id';
 
 export abstract class Element {
 
@@ -119,13 +119,14 @@ export class WayGroup extends GenericElement<Relation, Way> {
             return;
         }
 
+        const wayEnds = [way.childIds[0], way.childIds[way.childIds.length - 1]];
+
         for (const role of roles) {
             /** The list of known way groups that successfully added the fulfilled way */
             const added = relation.children.filter(wg => wg.role === role && wg.add(way));
 
             // no existing way group will take it, add a new one
             if (added.length === 0) {
-                console.log('adding new way group with role', role);
                 const wg = new WayGroup(relation.id, role, way);
                 relation.wayGroups.set(wg.id, wg);
                 relation.addChildUnique(wg.id);
@@ -134,56 +135,46 @@ export class WayGroup extends GenericElement<Relation, Way> {
             }
 
             // check if the new way bridged two existing way groups
-            console.log(`checking for bridging among ${added.length} way groups`);
             for (let i = 0; i < added.length - 1; i++) {
                 /** The older of two way groups */
                 const senior = added[i];
-                let junior: WayGroup | undefined;
-
-                if (unreversed(senior.childIds[0]) === way.id) {
-                    //console.log(`checking against ${senior.id} start: ${senior.startsWithNode}`);
-                    // the newer way group connects to the beginning of the older
-                    junior = added.slice(i+1)
-                        .find(wg => {
-                            //console.log('Comparingwith');
-                            return [wg.startsWithNode, wg.endsWithNode].includes(senior.startsWithNode);
-                        });
-                }
-                else if (unreversed(senior.childIds[senior.childIds.length - 1]) === way.id) {
-                    //console.log(`checking against ${senior.id} end: ${senior.endsWithNode}`);
-                    /// the newer way group connects to the end of the older
-                    junior = added.slice(i+1)
-                    .find(wg => {
-                        //console.log('Comparing', senior, 'with', wg);
-                        return [wg.startsWithNode, wg.endsWithNode].includes(senior.endsWithNode);
-                    });
-                }
-                else {
-                    console.error('Senior does not match fulfilled way!');
-                    return;
-                }
+                const seniorEndWays = [
+                    unreversed(senior.childIds[0]), 
+                    unreversed(senior.childIds[senior.childIds.length - 1]),
+                ];
+                const junior = added.slice(i+1).find(wg => {
+                    return seniorEndWays.includes(unreversed(wg.childIds[0]))
+                        || seniorEndWays.includes(unreversed(wg.childIds[wg.childIds.length - 1]));
+                });
 
                 if (!junior) {
-                    console.log('No bridging way group found');
                     continue;
                 }
 
-                console.log(`Bridging way groups ${senior.id} and ${junior.id}`);
-                if (senior.endsWithNode === junior.startsWithNode) {
+                const seniorStart = wayEnds.indexOf(senior.startsWithNode);
+                const seniorEnd = wayEnds.indexOf(senior.endsWithNode);
+                const juniorStart = wayEnds.indexOf(junior.startsWithNode);
+                const juniorEnd = wayEnds.indexOf(junior.endsWithNode);
+
+                // append forward
+                if (seniorEnd >= 0 && juniorStart >= 0 && seniorEnd !== juniorStart) {
                     senior.childIds.push(...junior.childIds.slice(1));
                     senior.endsWithNode = junior.endsWithNode;
                 }
-                else if (junior.endsWithNode === senior.startsWithNode) {
+                // prepend forward
+                else if (seniorStart >= 0 && juniorEnd >= 0 && seniorStart !== juniorEnd) {
                     senior.childIds.unshift(...junior.childIds.slice(0, -1));
                     senior.startsWithNode = junior.startsWithNode;
                 }
-                else if (junior.startsWithNode === senior.startsWithNode) {
-                    senior.childIds.unshift(...junior.childIds.slice(1).reverse().map(w => reverse(w)));
-                    senior.startsWithNode = junior.endsWithNode;
-                }
-                else if (junior.endsWithNode === senior.endsWithNode) {
-                    senior.childIds.push(...junior.childIds.slice(0, -1).reverse().map(w => reverse(w)));
+                // append reverse
+                else if (seniorEnd >= 0 && juniorEnd >= 0 && seniorEnd !== juniorEnd) {
+                    senior.childIds.push(...junior.childIds.reverse().map(w => reverse(w)).slice(1));
                     senior.endsWithNode = junior.startsWithNode;
+                }
+                // prepend reverse
+                else if (seniorStart >= 0 && juniorStart >= 0 && seniorStart !== juniorStart) {
+                    senior.childIds.unshift(...junior.childIds.reverse().map(w => reverse(w)).slice(0, -1));
+                    senior.startsWithNode = junior.endsWithNode;
                 }
                 else {
                     console.error('How did we get here?');
@@ -203,6 +194,10 @@ export class WayGroup extends GenericElement<Relation, Way> {
 
     public get data(): never {
         throw new Error("WayGroups don't have data");
+    }
+
+    public get name(): string {
+        return `${this.children[0].name}, ${this.role}`;
     }
 
     public constructor(relationId: Id, role: string, ...ways: Way[]) {
@@ -227,45 +222,34 @@ export class WayGroup extends GenericElement<Relation, Way> {
         const firstNode = way.childIds[0];
         const lastNode = way.childIds[way.childIds.length - 1];
         if (this.childIds.length === 0) {
-            console.log('way first/last:', firstNode, lastNode);
             this.childIds.push(way.id);
             this.startsWithNode = firstNode;
             this.endsWithNode = lastNode;
             way.parentIds.push(this.id);
-            console.log(`Adding way ${way.id} to way group ${this.id} as first`);
         }
         else if (this.endsWithNode === firstNode) {
-            console.log('way first/last:', firstNode, lastNode);
             this.childIds.push(way.id);
             this.endsWithNode = lastNode;
             way.parentIds.push(this.id);
-            console.log(`Adding way ${way.id} to way group ${this.id} to end`);
         }
         else if (this.startsWithNode === lastNode) {
-            console.log('way first/last:', firstNode, lastNode);
             this.childIds.unshift(way.id);
             this.startsWithNode = firstNode;
             way.parentIds.push(this.id);
-            console.log(`Adding way ${way.id} to way group ${this.id} to start`);
         }
         else if (this.startsWithNode === firstNode) {
-            console.log('way first/last:', firstNode, lastNode);
             this.childIds.unshift(reverse(way.id));
             this.startsWithNode = lastNode;
             way.parentIds.push(this.id);
-            console.log(`Adding way ${way.id} to way group ${this.id} to start reversed`);
         }
         else if (this.endsWithNode === lastNode) {
-            console.log('way first/last:', firstNode, lastNode);
             this.childIds.push(reverse(way.id));
             this.endsWithNode = firstNode;
             way.parentIds.push(this.id);
-            console.log(`Adding way ${way.id} to way group ${this.id} to end reversed`);
         }
         else {
             return false;
         }
-        console.log('new group first/last:', this.startsWithNode, this.endsWithNode);
         
         return true;
     }
