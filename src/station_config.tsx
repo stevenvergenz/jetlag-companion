@@ -14,6 +14,9 @@ const StationStyle: PathOptions = {
     fillOpacity: 0.8,
 };
 
+const busTypes = ['bus', 'trolleybus', 'tram'];
+const trainTypes = ['train', 'subway', 'monorail', 'light_rail'];
+
 class StationGroup {
     private static findUp<T extends Element>(tag: string, es: Map<Id, Element>): Map<Id, T> {
         return this.find(tag, [...es.values()].flatMap(e => e.parents));
@@ -94,13 +97,14 @@ export function StationConfig(): ReactNode {
         stations: {
             show, setShow,
             busRouteThreshold, setBusRouteThreshold,
+            trainRouteThreshold, setTrainRouteThreshold,
         },
         save,
     } = useContext(Context);
 
     useEffect(() => {
         save();
-    }, [save, show, busRouteThreshold]);
+    }, [save, show, busRouteThreshold, trainRouteThreshold]);
 
     return <TreeNode id='stations' initiallyOpen={true}>
         <label className='font-bold'>
@@ -110,7 +114,12 @@ export function StationConfig(): ReactNode {
         <TreeNode id='station-settings' initiallyOpen={true}>
             <span className='font-bold'>Settings</span>
             <label>
-                <input type='number' min='1' max='10'
+                <input type='number' min='0' max='10'
+                    value={trainRouteThreshold} onChange={e => setTrainRouteThreshold(e.target.valueAsNumber)}/>
+                &nbsp; Train routes
+            </label>
+            <label>
+                <input type='number' min='0' max='10'
                     value={busRouteThreshold} onChange={e => setBusRouteThreshold(e.target.valueAsNumber)}/>
                 &nbsp; Bus routes
             </label>
@@ -121,7 +130,7 @@ export function StationConfig(): ReactNode {
 export function StationMarkers(): ReactNode {
     const {
         boundary: { editing, path },
-        stations: { show, busRouteThreshold },
+        stations: { show, busRouteThreshold, trainRouteThreshold },
     } = useContext(Context);
     const [ stations, setStations ] = useState([] as StationGroup[]);
 
@@ -149,16 +158,16 @@ export function StationMarkers(): ReactNode {
         helper();
     }, [path, busRouteThreshold]);
 
-    function modeString(station: StationGroup): string {
-        const modes = [];
-        
+    function modeString(station: StationGroup): ReactNode {
+        const modes = [] as string[];
+
         if (station.station) {
             modes.push('Station');
         }
 
         if ([...station.platforms.values()].some(p => p.data.tags?.railway === 'platform')) {
             const routeStr = [...station.routeMasters.values()]
-                .filter(rm => rm.data.tags?.route_master === 'train')
+                .filter(rm => trainTypes.includes(rm.data.tags!.route_master))
                 .map(r => r.data.tags?.ref)
                 .join(', ');
             modes.push(`Rail (${routeStr})`);
@@ -166,13 +175,13 @@ export function StationMarkers(): ReactNode {
 
         if ([...station.platforms.values()].some(p => p.data.tags?.highway === 'bus_stop')) {
             const routeStr = [...station.routeMasters.values()]
-                .filter(rm => rm.data.tags?.route_master === 'bus')
+                .filter(rm => busTypes.includes(rm.data.tags!.route_master))
                 .map(r => r.data.tags?.ref)
                 .join(', ');
             modes.push(`Bus (${routeStr})`);
         }
 
-        return modes.join('\n');
+        return modes.map(m => <p>{m}</p>);
     }
 
     function renderStation(station: StationGroup): ReactNode {
@@ -189,7 +198,6 @@ export function StationMarkers(): ReactNode {
                     center={[v.lat, v.lon]}
                     radius={5}
                     pathOptions={StationStyle}>
-                    
                 </CircleMarker>);
             }
         }
@@ -198,7 +206,7 @@ export function StationMarkers(): ReactNode {
             {visuals}
             <Tooltip>
                 <p className='font-bold'>{station.name}</p>
-                <p>{modeString(station)}</p>
+                {modeString(station)}
             </Tooltip>
         </FeatureGroup>;
     }
@@ -209,7 +217,14 @@ export function StationMarkers(): ReactNode {
             const type = rm.data.tags!.route_master;
             types.set(type, (types.get(type) ?? 0) + 1);
         }
-        return (types.get('bus') ?? 0) >= busRouteThreshold;
+
+        const otherTypes = [...types.keys()].filter(t => !busTypes.includes(t) && !trainTypes.includes(t));
+
+        return busRouteThreshold > 0 && busRouteThreshold <=
+            busTypes.map(t => types.get(t) ?? 0).reduce((a, b) => a + b)
+        || trainRouteThreshold > 0 && trainRouteThreshold <=
+            trainTypes.map(t => types.get(t) ?? 0).reduce((a, b) => a + b)
+        || otherTypes.length > 0;
     }
 
     if (path && !editing && show) {

@@ -26,6 +26,8 @@ type ContextContent = {
         setShow: React.Dispatch<React.SetStateAction<boolean>>,
         busRouteThreshold: number,
         setBusRouteThreshold: React.Dispatch<React.SetStateAction<number>>,
+        trainRouteThreshold: number,
+        setTrainRouteThreshold: React.Dispatch<React.SetStateAction<number>>,
     },
 
     hovering: Id,
@@ -54,6 +56,8 @@ const dummyContent: ContextContent = {
         setShow: () => {},
         busRouteThreshold: 2,
         setBusRouteThreshold: () => {},
+        trainRouteThreshold: 1,
+        setTrainRouteThreshold: () => {},
     },
 
     hovering: '',
@@ -72,6 +76,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
     const [boundaryErrors, setBoundaryErrors] = useState(new Set<Id>());
     const [showStations, setShowStations] = useState(config.stations.show);
     const [busRouteThreshold, setBusRouteThreshold] = useState(config.stations.busRouteThreshold);
+    const [trainRouteThreshold, setTrainRouteThreshold] = useState(config.stations.trainRouteThreshold);
 
     const context: ContextContent = {
         boundary: {
@@ -85,6 +90,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         stations: {
             show: showStations, setShow: setShowStations,
             busRouteThreshold, setBusRouteThreshold,
+            trainRouteThreshold, setTrainRouteThreshold,
         }, 
 
         hovering, setHovering,
@@ -96,6 +102,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
                 stations: {
                     show: showStations,
                     busRouteThreshold,
+                    trainRouteThreshold,
                 },
             });
         },
