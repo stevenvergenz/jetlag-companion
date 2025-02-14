@@ -1,5 +1,5 @@
 import { ReactNode, useState, useEffect, useContext } from 'react';
-import { CircleMarker, LayerGroup, Polygon, Tooltip } from 'react-leaflet';
+import { CircleMarker, LayerGroup, FeatureGroup, Polygon, Tooltip } from 'react-leaflet';
 import { PathOptions } from 'leaflet';
 
 import { Id } from './id';
@@ -7,6 +7,12 @@ import { TreeNode } from './tree_node';
 import { Context } from './context';
 import { getByTransportTypeAsync } from './overpass_cache';
 import { Element, Relation, Way, Node } from './element';
+
+const StationStyle: PathOptions = {
+    color: '#3388ff',
+    weight: 2,
+    fillOpacity: 0.8,
+};
 
 class StationGroup {
     private static findUp<T extends Element>(tag: string, es: Map<Id, Element>): Map<Id, T> {
@@ -30,6 +36,25 @@ class StationGroup {
     public stopAreas: Map<Id, Relation> = new Map();
     public platforms: Map<Id, (Way | Node)> = new Map();
     public routeMasters: Map<Id, Relation> = new Map();
+
+    public get id(): Id {
+        const repId = this.station?.id
+            ?? this.stopAreas.values().next().value?.id
+            ?? this.platforms.values().next().value?.id
+            ?? 'unknown';
+        return `station-${repId}`;
+    }
+
+    public get name(): string {
+        return this.station?.name
+            ?? this.stopAreas.values().next().value?.name
+            ?? this.platforms.values().next().value?.name
+            ?? '<Unknown>';
+    }
+
+    public get visuals(): (Way | Node)[] {
+        return this.station ? [this.station] : [...this.platforms.values()];
+    }
 
     public add(platform: Way | Node) {
         this.platforms.set(platform.id, platform);
@@ -64,20 +89,18 @@ class StationGroup {
     }
 }
 
-const StationStyle: PathOptions = {
-    color: '#3388ff',
-    weight: 2,
-    fillOpacity: 0.8,
-};
-
 export function StationConfig(): ReactNode {
     const {
         stations: {
             show, setShow,
-            useTransitStations, setUseTransitStations,
-            busTransferThreshold: busStopThreshold, setBusTransferThreshold: setBusStopThreshold,
+            busRouteThreshold, setBusRouteThreshold,
         },
+        save,
     } = useContext(Context);
+
+    useEffect(() => {
+        save();
+    }, [save, show, busRouteThreshold]);
 
     return <TreeNode id='stations' initiallyOpen={true}>
         <label className='font-bold'>
@@ -87,14 +110,9 @@ export function StationConfig(): ReactNode {
         <TreeNode id='station-settings' initiallyOpen={true}>
             <span className='font-bold'>Settings</span>
             <label>
-                <input type='checkbox'
-                    checked={useTransitStations} onChange={e => setUseTransitStations(e.target.checked)} />
-                &nbsp; Transit stations
-            </label>
-            <label>
-                <input type='number' min='0' max='5'
-                    value={busStopThreshold} onChange={e => setBusStopThreshold(e.target.valueAsNumber)}/>
-                &nbsp; Bus transfers
+                <input type='number' min='1' max='10'
+                    value={busRouteThreshold} onChange={e => setBusRouteThreshold(e.target.valueAsNumber)}/>
+                &nbsp; Bus routes
             </label>
         </TreeNode>
     </TreeNode>;
@@ -103,7 +121,7 @@ export function StationConfig(): ReactNode {
 export function StationMarkers(): ReactNode {
     const {
         boundary: { editing, path },
-        stations: { show, useTransitStations, busTransferThreshold },
+        stations: { show, busRouteThreshold },
     } = useContext(Context);
     const [ stations, setStations ] = useState([] as StationGroup[]);
 
@@ -129,65 +147,74 @@ export function StationMarkers(): ReactNode {
             setStations(stations);
         }
         helper();
-    }, [path, useTransitStations, busTransferThreshold]);
+    }, [path, busRouteThreshold]);
 
     function modeString(station: StationGroup): string {
         const modes = [];
-        const stations = stopArea.children.filter(c => c.data.tags?.public_transport === 'station');
-        if (stations.length > 0) {
+        
+        if (station.station) {
             modes.push('Station');
-            const areas = stations
-                .flatMap(s => s.parents)
-                .filter(p => p instanceof Relation && p.data.tags?.public_transport === 'stop_area');
-            
-            if (areas.flatMap(a => a.children).some(c => c.data.tags?.railway !== undefined)) {
-                modes.push('Rail');
-            }
-            if (areas.flatMap(a => a.children).some(c => c.data.tags?.highway === 'bus_stop')) {
-                modes.push(`Bus`);
-            }
         }
-        else {
-            if (stopArea.children.some(c => c.data.tags?.railway !== undefined)) {
-                modes.push('Rail');
-            }
-            if (stopArea.children.some(c => c.data.tags?.highway === 'bus_stop')) {
-                modes.push(`Bus`);
-            }
+
+        if ([...station.platforms.values()].some(p => p.data.tags?.railway === 'platform')) {
+            const routeStr = [...station.routeMasters.values()]
+                .filter(rm => rm.data.tags?.route_master === 'train')
+                .map(r => r.data.tags?.ref)
+                .join(', ');
+            modes.push(`Rail (${routeStr})`);
         }
-        return modes.join(', ');
+
+        if ([...station.platforms.values()].some(p => p.data.tags?.highway === 'bus_stop')) {
+            const routeStr = [...station.routeMasters.values()]
+                .filter(rm => rm.data.tags?.route_master === 'bus')
+                .map(r => r.data.tags?.ref)
+                .join(', ');
+            modes.push(`Bus (${routeStr})`);
+        }
+
+        return modes.join('\n');
     }
 
     function renderStation(station: StationGroup): ReactNode {
-        const marker = stopArea.children.find(c => c.data.tags?.public_transport === 'station')
-            ?? stopArea.children.find(c => c.data.tags?.public_transport === 'platform');
+        const visuals = [] as ReactNode[];
+        for (const v of station.visuals) {
+            if (v instanceof Way) {
+                visuals.push(<Polygon key={v.id}
+                    positions={v.children.map(c => [c.lat, c.lon])}
+                    pathOptions={StationStyle}>
+                </Polygon>);
+            }
+            else if (v instanceof Node) {
+                visuals.push(<CircleMarker key={v.id}
+                    center={[v.lat, v.lon]}
+                    radius={5}
+                    pathOptions={StationStyle}>
+                    
+                </CircleMarker>);
+            }
+        }
+        
+        return <FeatureGroup key={station.id}>
+            {visuals}
+            <Tooltip>
+                <p className='font-bold'>{station.name}</p>
+                <p>{modeString(station)}</p>
+            </Tooltip>
+        </FeatureGroup>;
+    }
 
-        if (marker instanceof Node) {
-            return <CircleMarker key={marker.id}
-                center={[marker.lat, marker.lon]}
-                radius={5}
-                pathOptions={StationStyle}>
-                <Tooltip>
-                    <p className='font-bold'>{stopArea.name}</p>
-                    <p>{modeString(stopArea)}</p>
-                </Tooltip>
-            </CircleMarker>;
+    function shouldShow(station: StationGroup): boolean {
+        const types = new Map<string, number>();
+        for (const rm of station.routeMasters.values()) {
+            const type = rm.data.tags!.route_master;
+            types.set(type, (types.get(type) ?? 0) + 1);
         }
-        else if (marker instanceof Way) {
-            return <Polygon key={marker.id}
-                positions={marker.children.map(c => [c.lat, c.lon])}
-                pathOptions={StationStyle}>
-                <Tooltip>
-                    <p className='font-bold'>{stopArea.name}</p>
-                    <p>{modeString(stopArea)}</p>
-                </Tooltip>
-            </Polygon>;
-        }
+        return (types.get('bus') ?? 0) >= busRouteThreshold;
     }
 
     if (path && !editing && show) {
         return <LayerGroup>
-            {stations.map(s => renderStation(s))}
+            {stations.filter(shouldShow).map(s => renderStation(s))}
         </LayerGroup>;
     }
 }

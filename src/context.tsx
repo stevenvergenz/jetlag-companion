@@ -24,10 +24,8 @@ type ContextContent = {
     stations: {
         show: boolean,
         setShow: React.Dispatch<React.SetStateAction<boolean>>,
-        useTransitStations: boolean,
-        setUseTransitStations: React.Dispatch<React.SetStateAction<boolean>>,
-        busTransferThreshold: number,
-        setBusTransferThreshold: React.Dispatch<React.SetStateAction<number>>,
+        busRouteThreshold: number,
+        setBusRouteThreshold: React.Dispatch<React.SetStateAction<number>>,
     },
 
     hovering: Id,
@@ -54,10 +52,8 @@ const dummyContent: ContextContent = {
     stations: {
         show: config.stations.show,
         setShow: () => {},
-        useTransitStations: config.stations.useTransitStations,
-        setUseTransitStations: () => {},
-        busTransferThreshold: 2,
-        setBusTransferThreshold: () => {},
+        busRouteThreshold: 2,
+        setBusRouteThreshold: () => {},
     },
 
     hovering: '',
@@ -74,9 +70,8 @@ export function ContextProvider({ children }: { children: ReactNode }) {
     const [boundary, setBoundary] = useState(undefined as LatLngTuple[] | undefined);
     const [hovering, setHovering] = useState('');
     const [boundaryErrors, setBoundaryErrors] = useState(new Set<Id>());
-    const [showStations, setShowStations] = useState(true);
-    const [useTransitStations, setUseTransitStations] = useState(true);
-    const [busTransferThreshold, setBusTransferThreshold] = useState(2);
+    const [showStations, setShowStations] = useState(config.stations.show);
+    const [busRouteThreshold, setBusRouteThreshold] = useState(config.stations.busRouteThreshold);
 
     const context: ContextContent = {
         boundary: {
@@ -89,8 +84,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         },
         stations: {
             show: showStations, setShow: setShowStations,
-            useTransitStations, setUseTransitStations,
-            busTransferThreshold, setBusTransferThreshold,
+            busRouteThreshold, setBusRouteThreshold,
         }, 
 
         hovering, setHovering,
@@ -101,7 +95,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
                 },
                 stations: {
                     show: showStations,
-                    useTransitStations,
+                    busRouteThreshold,
                 },
             });
         },

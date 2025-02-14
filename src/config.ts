@@ -7,7 +7,7 @@ export type BoundaryConfig = {
 
 export type StationConfig = {
     show: boolean,
-    useTransitStations: boolean,
+    busRouteThreshold: number,
 };
 
 export type Config = {
@@ -22,7 +22,7 @@ const DefaultConfig: Config = {
     },
     stations: {
         show: true,
-        useTransitStations: true,
+        busRouteThreshold: 2,
     },
 }
 
@@ -45,7 +45,8 @@ export function load(): Config {
                 return undefined;
             }
         });
-            
+    
+    const busRoutes = window.localStorage.getItem('stations_bus_routes');
     return {
         boundary: {
             included: bi ?? DefaultConfig.boundary.included,
@@ -53,7 +54,7 @@ export function load(): Config {
         },
         stations: {
             show: window.localStorage.getItem('stations_show') === 'true',
-            useTransitStations: window.localStorage.getItem('stations_use_transit') === 'true',
+            busRouteThreshold: busRoutes !== null ? parseInt(busRoutes, 10) : DefaultConfig.stations.busRouteThreshold,
         },
     };
 }
@@ -62,5 +63,5 @@ export function save(config: Config) {
     window.localStorage.setItem('boundary_included', JSON.stringify([...config.boundary.included]));
     window.localStorage.setItem('boundary_excluded', JSON.stringify([...config.boundary.excluded]));
     window.localStorage.setItem('stations_show', config.stations.show.toString());
-    window.localStorage.setItem('stations_use_transit', config.stations.useTransitStations.toString());
+    window.localStorage.setItem('stations_bus_routes', config.stations.busRouteThreshold.toString());
 }
