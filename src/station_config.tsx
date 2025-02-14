@@ -24,13 +24,12 @@ const BusStyle: PathOptions = {
 
 export function StationConfig(): ReactNode {
     const {
-        showStations, setShowStations,
-        useTransitStations, setUseTransitStations,
+        stations: { show, setShow, useTransitStations, setUseTransitStations },
     } = useContext(Context);
 
     return <TreeNode id='stations' initiallyOpen={true}>
         <label className='font-bold'>
-            <input type='checkbox' checked={showStations} onChange={e => setShowStations(e.target.checked)} />
+            <input type='checkbox' checked={show} onChange={e => setShow(e.target.checked)} />
             &nbsp; Stations
         </label>
         <TreeNode id='station-settings' initiallyOpen={true}>
@@ -47,21 +46,24 @@ export function StationConfig(): ReactNode {
 }
 
 export function StationMarkers(): ReactNode {
-    const { boundary, editingBoundary, showStations, useTransitStations } = useContext(Context);
+    const {
+        boundary: { editing, path },
+        stations: { show, useTransitStations },
+    } = useContext(Context);
     const [ rail, setRail ] = useState([] as Node[]);
     const [ bus, setBus ] = useState([] as Node[]);
 
     useEffect(() => {
         async function helper() {
-            if (!boundary || boundary.length < 2) { return; }
-            const res = await getStations(boundary, useTransitStations);
+            if (!path || path.length < 2) { return; }
+            const res = await getStations(path, useTransitStations);
             setRail(res.filter(n => n.data.tags?.railway === 'station'));
             setBus(res.filter(n => n.data.tags?.highway === 'bus_stop'));
         }
         helper();
-    }, [boundary, useTransitStations]);
+    }, [path, useTransitStations]);
 
-    if (boundary && !editingBoundary && showStations) {
+    if (path && !editing && show) {
         return <LayerGroup>
             {rail.map(n =>
                 <CircleMarker key={n.id} center={[n.lat, n.lon]} radius={5} pathOptions={RailStyle}>

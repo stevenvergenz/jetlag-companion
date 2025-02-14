@@ -64,15 +64,15 @@ const MaxDistanceMeters = 500;
 const MaxDot = -0.5;
 
 export async function generateBoundaryLoopPath(
-    included: Id[], excluded: Id[], distanceFn: DistanceFn,
+    included: Set<Id>, excluded: Set<Id>, distanceFn: DistanceFn,
 ): Promise<LatLngTuple[] | undefined> {
-    const ids = included.filter(id => !excluded.includes(id));
+    const ids = [...included].filter(id => !excluded.has(id));
     const rs = await getAsync(ids);
     return mergeRelations(rs as Relation[], excluded, distanceFn);
 }
 
 export function mergeRelations(
-    relations: Relation[], excluded: Id[], distanceFn: DistanceFn,
+    relations: Relation[], excluded: Set<Id>, distanceFn: DistanceFn,
 ): LatLngTuple[] | undefined {
     const legs = relations
         .map(r => {
@@ -194,9 +194,9 @@ export function calcIntersection(seg1: PathSegment, seg2: PathSegment): LatLngTu
     return [intersectX, intersectY];
 }
 
-export function calcRelationPath(relation: Relation, excluded: Id[], distanceFn: DistanceFn): LatLngTuple[] {
+export function calcRelationPath(relation: Relation, excluded: Set<Id>, distanceFn: DistanceFn): LatLngTuple[] {
     const wgs = relation.children
-        .filter(w => !excluded.includes(w.id));
+        .filter(w => !excluded.has(w.id));
     const legs = wgs
         .map(wg => {
             const path = calcWayGroupPath(wg, excluded);
@@ -286,9 +286,9 @@ export function calcRelationPath(relation: Relation, excluded: Id[], distanceFn:
     return mergedPath;
 }
 
-export function calcWayGroupPath(wg: WayGroup, excluded: Id[]): LatLngTuple[] {
+export function calcWayGroupPath(wg: WayGroup, excluded: Set<Id>): LatLngTuple[] {
     const mergedPath = [] as LatLngTuple[];
-    for (const id of wg.childIds.filter(id => !excluded.includes(unreversed(id)))) {
+    for (const id of wg.childIds.filter(id => !excluded.has(unreversed(id)))) {
         const path = calcWayPath(id, wg.children.find(n => n.id === unreversed(id))!);
         mergedPath.push(...path.slice(mergedPath.length > 0 ? 1 : 0))
     }

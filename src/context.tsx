@@ -1,8 +1,9 @@
 import { createContext, ReactNode, useEffect, useState } from 'react';
 import { LatLngTuple } from 'leaflet';
+
 import { getAsync } from './overpass_api';
 import { Id, pack } from './id';
-import { Relation, Way } from './osm_element';
+import { Element, Relation, Way } from './osm_element';
 import { load, save } from './config';
 
 type ContextContent = {
@@ -11,8 +12,9 @@ type ContextContent = {
         setIncluded: React.Dispatch<React.SetStateAction<Set<Id>>>,
         excluded: Set<Id>,
         setExcluded: React.Dispatch<React.SetStateAction<Set<Id>>>,
-        boundary: LatLngTuple[] | undefined,
-        setBoundary: React.Dispatch<React.SetStateAction<LatLngTuple[] | undefined>>,
+        notExcluded: (id: Element | Id) => boolean,
+        path: LatLngTuple[] | undefined,
+        setPath: React.Dispatch<React.SetStateAction<LatLngTuple[] | undefined>>,
         editing: boolean,
         setEditing: React.Dispatch<React.SetStateAction<boolean>>,
         errors: Set<Id>,
@@ -39,8 +41,9 @@ const dummyContent: ContextContent = {
         setIncluded: () => {},
         excluded: config.boundary.excluded,
         setExcluded: () => {},
-        boundary: undefined,
-        setBoundary: () => {},
+        notExcluded: () => true,
+        path: undefined,
+        setPath: () => {},
         editing: false,
         setEditing: () => {},
         errors: new Set(),
@@ -74,7 +77,8 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         boundary: {
             included, setIncluded,
             excluded, setExcluded,
-            boundary, setBoundary,
+            notExcluded: (id: Element | Id) => !excluded.has(typeof(id) === 'string' ? id : id.id),
+            path: boundary, setPath: setBoundary,
             editing: editingBoundary, setEditing: setEditingBoundary,
             errors: boundaryErrors, setErrors: setBoundaryErrors,
         },
@@ -99,29 +103,25 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         async function helper() {
-            setBoundaryReady(false);
-
-            const relations = (await getAsync(included.filter(id => !excluded.includes(id)))) as Relation[];
+            const relations = (await getAsync([...included].filter(context.boundary.notExcluded))) as Relation[];
 
             const wayIds = relations
                 .flatMap(r => r.data.members)
                 .map(m => ({ type: m.type, id: m.ref }))
                 .filter(id => id.type === 'way')
                 .map(id => pack(id))
-                .filter(id => !excluded.includes(id));
+                .filter(context.boundary.notExcluded);
             const ways = (await getAsync(wayIds)) as Way[];
 
             const nodeIds = ways
-                .filter(w => !excluded.includes(w.id))
+                .filter(context.boundary.notExcluded)
                 .flatMap(w => w.childIds);
             await getAsync(nodeIds);
-
-            setBoundaryReady(true);
         }
 
         helper();
 
-    }, [included, excluded]);
+    }, [context.boundary, included, excluded]);
 
     return <Context.Provider value={context}>
         {children}

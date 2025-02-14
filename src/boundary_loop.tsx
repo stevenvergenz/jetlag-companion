@@ -7,23 +7,26 @@ import { BoundaryError, generateBoundaryLoopPath } from './boundary_calc';
 export function BoundaryLoop(): ReactNode {
     const map = useMap();
     const {
-        editingBoundary,
-        boundaryReady,
-        setBoundary,
-        included, excluded,
-        setErrorWays,
+        boundary: {
+            included,
+            excluded,
+            setPath,
+            setErrors,
+            editing,
+        }
     } = useContext(Context);
-    const [path, setPath] = useState([] as LatLngExpression[][]);
+    const [poly, setPoly] = useState([] as LatLngExpression[][]);
 
     useEffect(() => {
         async function helper() {
-            if (!map || editingBoundary || !boundaryReady || included.length === 0) { return; }
+            if (!map || editing || included.size === 0) { return; }
             let p: LatLngTuple[] | undefined;
             try {
                 p = await generateBoundaryLoopPath(included, excluded, map.distance.bind(map));
+                setErrors(new Set());
             } catch (e) {
                 if (e instanceof BoundaryError) {
-                    setErrorWays(e.relevantIds);
+                    setErrors(new Set(e.relevantIds));
                 } else {
                     throw e;
                 }
@@ -36,11 +39,11 @@ export function BoundaryLoop(): ReactNode {
                 console.log(`Boundary path closed with ${p.length} points`);
             }
 
-            setBoundary(p);
+            setPath(p);
 
             const innerBounds = new LatLngBounds(p);
             const outerBounds = innerBounds.pad(2);
-            setPath([
+            setPoly([
                 [
                     outerBounds.getNorthEast(), outerBounds.getNorthWest(),
                     outerBounds.getSouthWest(), outerBounds.getSouthEast(),
@@ -50,11 +53,11 @@ export function BoundaryLoop(): ReactNode {
             map.fitBounds(innerBounds, { padding: [0, 0] });
         }
         helper();
-    }, [included, excluded, map, boundaryReady, editingBoundary, setBoundary, setErrorWays]);
+    }, [included, excluded, map, editing, setPath, setErrors]);
 
-    if (!editingBoundary && boundaryReady) {
+    if (!editing) {
         return <LayerGroup>
-            <Polygon pathOptions={{ color: 'black' }} positions={path} />
+            <Polygon pathOptions={{ color: 'black' }} positions={poly} />
         </LayerGroup>;
     }
 }
