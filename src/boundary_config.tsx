@@ -2,7 +2,7 @@ import { ReactNode, useContext, useEffect, useState } from 'react';
 
 import { Id, pack, unpack } from './id';
 import { getAsync } from './overpass_api';
-import { Relation, Way, WayGroup } from './osm_element';
+import { Relation, Way, WayGroup } from './element';
 import { TreeNode } from './tree_node';
 import { Context } from './context';
 

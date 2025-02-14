@@ -1,5 +1,5 @@
 import { LatLngTuple } from 'leaflet';
-import { Relation, Way, Node, WayGroup } from '../osm_element';
+import { Relation, Way, Node, WayGroup } from '../element';
 import { cache } from '../overpass_api';
 import { pack } from '../id';
 

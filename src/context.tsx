@@ -3,7 +3,7 @@ import { LatLngTuple } from 'leaflet';
 
 import { requestAsync } from './overpass_api';
 import { Id, pack } from './id';
-import { Element, Relation, Way } from './osm_element';
+import { Element, Relation, Way } from './element';
 import { load, save } from './config';
 
 type ContextContent = {

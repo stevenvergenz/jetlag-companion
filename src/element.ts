@@ -1,5 +1,6 @@
-import { OsmElement, OsmNode, OsmRelation, OsmWay, OsmWayGroup, get } from "./overpass_api";
+import { OsmElement, OsmNode, OsmRelation, OsmWay, OsmWayGroup } from "./overpass_api";
 import { Id, pack, packFrom, unpack, reverse, unreversed } from './id';
+import { get } from './overpass_cache';
 
 export class HierarchyHelper {
     private static interests = new Map<Id, Set<Id>>();

@@ -4,7 +4,7 @@ import { setup, relation, ways, nodes } from './test_common';
 
 import { calcIntersection, calcRelationPath, calcWayGroupPath, calcWayPath, mergeRelations } from '../boundary_calc';
 import { Id, reverse } from '../id';
-import { WayGroup } from '../osm_element';
+import { WayGroup } from '../element';
 import { LatLngTuple } from 'leaflet';
 
 function distance(a: LatLngTuple, b: LatLngTuple): number {

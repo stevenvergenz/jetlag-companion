@@ -4,7 +4,7 @@ import { LayerGroup, Polyline, useMap } from 'react-leaflet';
 
 import { Id } from './id';
 import { getAsync } from './overpass_api';
-import { Relation, WayGroup, Way, Node } from './osm_element';
+import { Relation, WayGroup, Way, Node } from './element';
 import { Context } from './context';
 
 const EnabledStyle: PathOptions = {

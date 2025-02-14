@@ -3,7 +3,7 @@ import { LatLngTuple } from 'leaflet';
 
 import { Id, reverse, isReversed, unreversed, packFrom } from './id';
 import { getAsync } from './overpass_api';
-import { Relation, WayGroup, Way } from './osm_element';
+import { Relation, WayGroup, Way } from './element';
 
 export const Vec2 = {
     add: (a: LatLngTuple, b: LatLngTuple): LatLngTuple => [a[0] + b[0], a[1] + b[1]],

@@ -5,7 +5,7 @@ import { PathOptions } from 'leaflet';
 import { TreeNode } from './tree_node';
 import { Context } from './context';
 import { requestStations } from './overpass_api';
-import { Relation, Way, Node } from './osm_element';
+import { Relation, Way, Node } from './element';
 
 const StationStyle: PathOptions = {
     color: '#3388ff',

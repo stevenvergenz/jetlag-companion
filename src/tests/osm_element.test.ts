@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { setup, relation } from './test_common';
-import { Element } from '../osm_element';
+import { Element } from '../element';
 import { Id, unreversed } from '../id';
 
 function checkChildren(e: Element, ids: Id[]) {

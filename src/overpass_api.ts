@@ -1,14 +1,10 @@
 import { LatLngTuple } from 'leaflet';
-import { Element, Node, Relation, Way } from './osm_element';
-import { Id, pack, packFrom, unpack, unreversed } from './id';
+import { Element, Node, Relation, Way } from './element';
+import { Id, packFrom, unpack, unreversed } from './id';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';
 
-export const cache = new Map<Id, Element>();
-
-const reqPromises = new Map<Id, Promise<void>>();
-const getPromises = new Map<Id, Promise<Element>>();
-const getCallbacks = new Map<Id, (e: Element) => void>();
+const reqPromises = new Map<Id, Promise<Element[]>>();
 
 type OsmQueryResult = {
     version: string,
@@ -54,36 +50,32 @@ export type OsmElement = OsmRelation | OsmWayGroup | OsmWay | OsmNode;
 
 const QueryLimit = 512 * 1024 * 1024; // 512MB
 
-async function query(query: string): Promise<Id[]> {
+async function query(query: string): Promise<Element[]> {
     const res = await fetch(endpoint, {
         method: 'POST',
         body: `[maxsize:${QueryLimit}][out:json]; ${query} out;`,
     });
     const body = await res.json() as OsmQueryResult;
-
-    for (const e of body.elements) {
+    return body.elements.map(e => {
         const id = packFrom(e);
-        switch (e.type) {
-            case 'relation':
-                cache.set(id, new Relation(id, e));
-                break;
-            case 'way':
-                cache.set(id, new Way(id, e));
-                break;
-            case 'node':
-                cache.set(id, new Node(id, e));
-                break;
+        if (e.type === 'relation') {
+            return new Relation(id, e);
         }
-        getCallbacks.get(id)?.(cache.get(id)!);
-    }
-
-    return body.elements.map(e => packFrom(e));
+        else if (e.type === 'way') {
+            return new Way(id, e);
+        }
+        else if (e.type === 'node') {
+            return new Node(id, e);
+        }
+        else {
+            throw new Error(`Unknown element type: ${e.type}`);
+        }
+    });
 }
 
-async function requestAsyncInternal(ids: Id[]): Promise<void> {
-    const queryIdParts = ids
-        .map(id => unpack(id))
-        .filter(iu => iu.type !== 'wayGroup');
+function requestAsyncInternal(ids: Id[]): Promise<Element[]> {
+    const queryIdParts = ids.map(id => unpack(id));
+
     if (queryIdParts.length > 0) {
         const relationIds = queryIdParts.filter(p => p.type === 'relation').map(p => p.id);
         const wayIds = queryIdParts.filter(p => p.type === 'way').map(p => p.id);
@@ -100,12 +92,15 @@ async function requestAsyncInternal(ids: Id[]): Promise<void> {
             q += `node(id:${nodeIds.join(',')});`;
         }
         q = `(${q});`;
-        await query(q);
+        return query(q);
+    }
+    else {
+        return Promise.resolve([]);
     }
 }
 
-export function requestAsync(...ids: Id[]): Promise<Element[]> {
-    ids = ids.map(id => unreversed(id));
+export async function requestAsync(ids: Id[]): Promise<Element[]> {
+    ids = ids.map(id => unreversed(id)).filter(id => unpack(id).type !== 'wayGroup');
     const queryIds = ids.filter(id => !reqPromises.has(id));
     if (queryIds.length > 0) {
         const p = requestAsyncInternal(queryIds);
@@ -114,117 +109,40 @@ export function requestAsync(...ids: Id[]): Promise<Element[]> {
         }
     }
 
-    return getAsync(...ids);
-}
-
-export function getAsync(...ids: Id[]): Promise<Element[]> {
-    return Promise.all(ids.map(id => {
-        if (getPromises.has(id)) {
-            return getPromises.get(id)!;
-        }
-        else if (reqPromises.has(id)) {
-            const p = reqPromises.get(id)!.then(() => get(id)!);
-            getPromises.set(id, p);
-            return p;
-        }
-        else {
-            const p = new Promise<Element>((resolve) => {
-                getCallbacks.set(id, resolve);
-            });
-            getPromises.set(id, p);
-            return p;
-        }
-    }));
-}
-
-export function get(id: Id): Element | undefined {
-    const idu = unpack(id);
-    if (idu.type === 'wayGroup') {
-        const parentId = pack({ type: 'relation', id: idu.id });
-        return (get(parentId) as Relation | undefined)?.wayGroups?.get(id);
+    let items = (await Promise.all(ids.map(id => reqPromises.get(id)!))).flat();
+    const ret = [] as Element[];
+    for (const id of ids) {
+        const e = items.find(e => e.id === id)!;
+        items = items.filter(e => e.id !== id);
+        ret.push(e);
     }
-    else {
-        return cache.get(unreversed(id));
-    }
+
+    return ret;
 }
 
-const stationCache = new Map<string, Id[]>();
-
-export async function requestStations(
-    poly: LatLngTuple[], 
-    useTransitStations: boolean, 
-    busTransferThreshold: number,
-): Promise<Relation[]> {
-    const polyStr = poly.flat().map(n => n?.toPrecision(6)).join(' ');
+export function requestTransport(poly: LatLngTuple[]): Promise<Element[]> {
+    const polyStr = poly.flat().join(' ');
     
-    let ids: Id[] = [];
-    if (!stationCache.has(polyStr)) {
-        // relation[public_transport=stop_area] describes a group of stops
-        //   can have members "platform", "stop_position", "station", etc.
-        // nw[public_transport=station] is many:many with stop_areas
-        // nw[public_transport=platform] describes a transit stop
-        // relation[type=route] describes a route variant going to a platform
-        // relation[type=route_master] describes a full route with all variants
-        const q = `
-            nwr(poly:"${polyStr}") -> .all;
-            nw.all[public_transport=station] -> .stations;
-            nw.all[public_transport=platform] -> .platforms;
-            rel.all[public_transport=stop_area] -> .areas;
-            rel.all[type=route] -> .routes;
-            rel(br.routes)[type=route_master] -> .route_masters;
-            (
-                .areas;
-                .platforms;
-                .stations;
-                .routes;
-                .route_masters;
-            );
-        `;
-        ids = await query(q);
-        stationCache.set(polyStr, ids);
-    }
-    else {
-        ids = stationCache.get(polyStr)!;
-    }
-
-    const stopAreas = ids.map(id => get(id))
-        .filter(e => e instanceof Relation && e.data.tags?.public_transport === 'stop_area') as Relation[];
-    const ret = new Set<Id>();
-
-    for (const sa of stopAreas) {
-        const stations = sa.children
-            .filter(e => e.data.tags?.public_transport === 'station');
-        const adjacentStopAreas: Relation[] =
-            stations.length === 0 ?
-            [sa] :
-            stations
-                .flatMap(s => s.parents)
-                .filter(p => p instanceof Relation && p.data.tags?.public_transport === 'stop_area') as Relation[];
-
-        if (adjacentStopAreas.some(a => ret.has(a.id))) {
-            continue;
-        }
-
-        const busPlatforms = adjacentStopAreas
-            .flatMap(a => a.children)
-            .filter(e => 
-                e.data.tags?.public_transport === 'platform' && e.data.tags?.highway === 'bus_stop'
-            ) as Relation[];
-        const routeMasters = busPlatforms
-            .flatMap(p => p.parents)
-            .filter(e => e.data.tags?.type === 'route')
-            .flatMap(r => r.parents)
-            .filter((r, i, arr) => {
-                return r.data.tags?.type === 'route_master' 
-                    && arr.slice(i + 1).findIndex(e => e.id === r.id) === -1;
-            }) as Relation[];
-
-        if (busPlatforms.length > 0 && routeMasters.length < busTransferThreshold) {
-            continue;
-        }
-
-        ret.add(sa.id);
-    }
-
-    return [...ret].map(id => get(id) as Relation);
+    // relation[public_transport=stop_area] describes a group of stops
+    //   can have members "platform", "stop_position", "station", etc.
+    // nw[public_transport=station] is many:many with stop_areas
+    // nw[public_transport=platform] describes a transit stop
+    // relation[type=route] describes a route variant going to a platform
+    // relation[type=route_master] describes a full route with all variants
+    const q = `
+        nwr(poly:"${polyStr}") -> .all;
+        nw.all[public_transport=platform] -> .platforms;
+        nw.all[public_transport=station] -> .stations;
+        rel.all[public_transport=stop_area] -> .areas;
+        rel.all[type=route] -> .routes;
+        rel(br.routes)[type=route_master] -> .route_masters;
+        (
+            .platforms;
+            .stations;
+            .areas;
+            .routes;
+            .route_masters;
+        );
+    `;
+    return query(q);
 }
