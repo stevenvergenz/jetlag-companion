@@ -4,18 +4,19 @@ import { APIProvider, Map } from '@vis.gl/react-google-maps';
 
 import TopBar from './top_bar';
 import SearchDialog from './search_dialog';
+import { BoundariesLayer, Boundary } from './boundaries';
 
 const API_KEY = "AIzaSyAcr_XaKIMdLG-vULO-PQ760gDzj3K3p0s";
 
 export default function Page(): JSX.Element {
     const [searchVisible, setSearchVisible] = useState(false);
-    const [boundaryIds, setBoundaryIds] = useState([] as number[]);
+    const [boundaries, setBoundaries] = useState([] as Boundary[]);
 
     return <div className='w-full h-full flex flex-col'>
         <TopBar />
         <div className='flex flex-row flex-grow'>
             <SearchDialog visible={searchVisible} close={() => setSearchVisible(false)}
-                boundaryIds={boundaryIds} setBoundaryIds={setBoundaryIds}/>
+                boundaries={boundaries} setBoundaries={setBoundaries}/>
             <APIProvider apiKey={API_KEY} region='us' language='en'>
                 <Map className='flex-grow'
                     mapId={'asdf'}
@@ -25,6 +26,7 @@ export default function Page(): JSX.Element {
                     disableDefaultUI={true}
                 >
                 </Map>
+                <BoundariesLayer boundaries={boundaries} />
             </APIProvider>
         </div>
     </div>;
