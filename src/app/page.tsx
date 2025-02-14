@@ -17,7 +17,7 @@ export default function Page(): JSX.Element {
         <div className='flex flex-row flex-grow'>
             <SearchDialog visible={searchVisible} close={() => setSearchVisible(false)}
                 boundaries={boundaries} setBoundaries={setBoundaries}/>
-            <APIProvider apiKey={API_KEY} region='us' language='en'>
+            <APIProvider apiKey={API_KEY} region='us' language='en' libraries={['geometry']}>
                 <Map className='flex-grow'
                     mapId={'asdf'}
                     defaultCenter={{lat: 39.568558865886956, lng: -95.65381563753864}}

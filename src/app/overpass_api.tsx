@@ -45,9 +45,10 @@ function req<T extends OsmCommon>(query: string): Promise<OsmQueryResult<T>> {
 export async function search_road(pattern: string): Promise<OsmRelation[]> {
     const query = `
         [out:json];
-        relation
-            [type=route]
-            ["description" ~ "${pattern}"];
+        relation[type=route](24.41,-125.51,49.61,-66.09);
+        (
+            relation["name" ~ "${pattern}"];
+        );
         out;
         `;
 
@@ -62,29 +63,37 @@ export async function get_road_path(b: Boundary): Promise<OsmNode[]> {
             (${b.id});
         way(r);
         out;`;
-    const ways = await req<OsmWay>(waysQuery);
-    let wayIds = ways.elements.reduce((set, w) => {
-        set.add(w.id);
-        return set;
-    }, new Set<number>());
+    const waysReq = await req<OsmWay>(waysQuery);
 
-    let nodeIds = [] as number[];
-    const starts = ways.elements.map(w => w.nodes[0]);
-    const ends = ways.elements.map(w => w.nodes[w.nodes.length - 1]);
-    let wayIndex = starts.findIndex(s => !ends.includes(s));
-    while (wayIndex !== -1) {
-        console.log('Adding nodes', ways.elements[wayIndex].nodes);
-        wayIds.delete(ways.elements[wayIndex].id);
-        if (nodeIds.length === 0) {
-            nodeIds.push(...ways.elements[wayIndex].nodes);
-        } else {
-            nodeIds.push(...ways.elements[wayIndex].nodes.slice(1));
+    let ways = waysReq.elements.reduce((map, w) => {
+        map.set(w.id, w.nodes);
+        return map;
+    }, new Map<number, number[]>());
+    const ends = waysReq.elements.reduce((map, w) => {
+        map.set(w.nodes[w.nodes.length - 1], w.id);
+        return map;
+    }, new Map<number, number>());
+
+    // merge all the ways that share start/end nodes
+    let unstable = true;
+    while (unstable) {
+        unstable = false;
+        for (const wayId of ways.keys()) {
+            let nodeIds = ways.get(wayId) as number[];
+            const preceding = ends.get(nodeIds[0]);
+            if (preceding) {
+                let pNodes = ways.get(preceding) as number[];
+                ends.delete(pNodes[pNodes.length - 1]);
+                pNodes.push(...nodeIds.slice(1));
+                ways.set(preceding, pNodes);
+                ends.set(pNodes[pNodes.length - 1], preceding);
+                ways.delete(wayId);
+                unstable = true;
+            }
         }
-        wayIndex = starts.findIndex(s => s === nodeIds[nodeIds.length - 1]);
     }
 
-    console.log('Discontinuous ways:', wayIds);
-
+    const nodeIds = [...ways.values()].flat();
     const nodesQuery = `
         [out:json];
         node(id:${nodeIds.join(',')});
@@ -94,7 +103,54 @@ export async function get_road_path(b: Boundary): Promise<OsmNode[]> {
         map.set(n.id, n);
         return map;
     }, new Map());
-    return nodeIds.map(id => nodeLookup.get(id) as OsmNode);
+
+    // merge ways if start and end nodes are close together
+    unstable = ways.size > 1;
+    while (unstable) {
+        unstable = false;
+        for (const wayId of ways.keys()) {
+            let nodeIds = ways.get(wayId) as number[];
+
+            const startLatLng = {
+                lat: nodeLookup.get(nodeIds[0])?.lat as number,
+                lng: nodeLookup.get(nodeIds[0])?.lon as number,
+            } satisfies google.maps.LatLngLiteral;
+            let closestId = undefined;
+            let closeness = Infinity;
+
+            for (const [otherId, otherNodeIds] of ways) {
+                if (otherId === wayId) {
+                    continue;
+                }
+                const otherLatLng = {
+                    lat: nodeLookup.get(otherNodeIds[otherNodeIds.length - 1])?.lat as number,
+                    lng: nodeLookup.get(otherNodeIds[otherNodeIds.length - 1])?.lon as number,
+                } satisfies google.maps.LatLngLiteral;
+                const dist = google.maps.geometry.spherical.computeDistanceBetween(
+                    startLatLng,
+                    otherLatLng,
+                );
+                console.log(`${otherId} -> ${wayId} = ${dist}`);
+                if (dist < closeness) {
+                    closeness = dist;
+                    closestId = otherId;
+                }
+            }
+
+            if (closestId !== undefined && closeness < 500) {
+                let pNodes = ways.get(closestId) as number[];
+                ends.delete(pNodes[pNodes.length - 1]);
+                pNodes.push(...nodeIds);
+                ways.set(closestId, pNodes);
+                ends.set(pNodes[pNodes.length - 1], closestId);
+                ways.delete(wayId);
+                unstable = true;
+            }
+        }
+    }
+    
+    console.log('ways', ways);
+    return [...ways.values()][0].map(id => nodeLookup.get(id) as OsmNode);
 }
 
 export function member_roles(relation: OsmRelation | undefined): string[] {

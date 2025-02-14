@@ -97,7 +97,11 @@ export default function SearchDialog({ visible, close, boundaries, setBoundaries
 
         <select value={id} onChange={onIdChange}
             className={searchResult.length === 0 ? 'hidden' : ''}>
-            {searchResult.map(r => <option key={r.id} value={r.id}>{r.tags?.['description']}</option>)}
+            {searchResult.map(r =>
+                <option key={r.id} value={r.id}>
+                    {r.tags?.['description'] ?? r.tags?.['name'] ?? r.tags?.['ref'] ?? '<unspecified>'}
+                </option>
+            )}
         </select>
 
         <select value={role} onChange={e => setRole(e.target.value)}>
