@@ -1,13 +1,14 @@
 'use client';
-import { JSX, useState } from 'react';
+import { ReactNode } from 'react';
 import { MapContainer, TileLayer } from './lazy';
 import '../../node_modules/leaflet/dist/leaflet.css';
 
 import TopBar from './top_bar';
 import { SideBar } from './side_bar';
 import { ContextProvider } from './context';
+import { BoundaryLayer } from './boundary_path';
 
-export default function Page(): JSX.Element {
+export default function Page(): ReactNode {
     return <div className='w-full h-full flex flex-col'>
         <TopBar />
         <div className='flex flex-row flex-grow'>
@@ -18,6 +19,7 @@ export default function Page(): JSX.Element {
                     zoom={4}
                 >
                     <TileLayer url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'></TileLayer>
+                    <BoundaryLayer />
                 </MapContainer>
             </ContextProvider>
         </div>

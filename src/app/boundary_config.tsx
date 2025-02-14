@@ -6,28 +6,51 @@ import { Relation, Way } from './osm_element';
 import { TreeNode } from './tree_node';
 import { Context } from './context';
 
+export function BoundaryConfig(): ReactNode {
+    const { included } = useContext(Context);
+
+    return <TreeNode id='boundaries' initiallyOpen={true}>
+        <span className='font-bold'>Boundaries</span>
+        { included.map(id => <RelationConfig key={`rc${id}`} id={id} />) }
+    </TreeNode>;
+}
+
 type RelationConfigProps = {
     id: number,
 };
 
 export function RelationConfig({ id }: RelationConfigProps): ReactNode {
     const {
-        hovering, setHovering
+        hovering, setHovering,
+        excluded, setExcluded,
     } = useContext(Context);
 
     const [relation, setRelation] = useState(undefined as Relation | undefined);
-    const [enabled, setEnabled] = useState(true);
 
     useEffect(() => {
         if (!relation || relation.id !== id) {
-            setRelation(get<Relation>(id));
+            getAsync<Relation>(id).then(r => setRelation(r));
         }
     }, [id]);
+
+    function enabled() {
+        return relation && !excluded.includes(relation.id);
+    }
+    function setEnabled(state: boolean) {
+        if (!relation) { return }
+        const isExcluded = excluded.includes(relation.id);
+        if (state && isExcluded) {
+            setExcluded(excluded.filter((id) => id !== relation.id));
+        }
+        else if (!state && !isExcluded) {
+            setExcluded([...excluded, relation.id]);
+        }
+    }
 
     function genLabel() {
         if (relation) {
             return <label>
-                <input type='checkbox' checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+                <input type='checkbox' checked={enabled()} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
                 {relation.name} (r:
                 <a target='_blank' href={`https://www.openstreetmap.org/relation/${relation.id}`}>{relation.id}</a>
@@ -47,23 +70,22 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
     return <TreeNode id={id.toString()} initiallyOpen={true}
         onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
         { genLabel() }
-        { relation?.wayGroups.map(w => <WayGroupConfig key={'wg' + w.id} id={w.id} inheritEnabled={enabled} />) }
+        { relation?.wayGroups.map(w => <WayGroupConfig key={'wgc' + w.id} id={w.id} />) }
     </TreeNode>;
 }
 
 
 type WayGroupConfigProps = {
     id: number,
-    inheritEnabled: boolean,
 };
 
-export function WayGroupConfig({ id, inheritEnabled }: WayGroupConfigProps): ReactNode {
+export function WayGroupConfig({ id }: WayGroupConfigProps): ReactNode {
     const {
-        hovering, setHovering
+        hovering, setHovering,
+        excluded, setExcluded,
     } = useContext(Context);
 
     const [way, setWay] = useState(undefined as Way | undefined);
-    const [enabled, setEnabled] = useState(true);
 
     useEffect(() => {
         if (!way || way.id !== id) {
@@ -71,11 +93,32 @@ export function WayGroupConfig({ id, inheritEnabled }: WayGroupConfigProps): Rea
         }
     }, [id]);
 
+    const groupId = -(way?.id ?? 0);
+
+    function inheritEnabled() {
+        return way && way.parents.every((p) => !excluded.includes(p.id));
+    }
+
+    function enabled() {
+        return way && !excluded.includes(groupId);
+    }
+
+    function setEnabled(state: boolean) {
+        if (!way) { return }
+        const isExcluded = excluded.includes(groupId);
+        if (state && isExcluded) {
+            setExcluded(excluded.filter((id) => id !== groupId));
+        }
+        else if (!state && !isExcluded) {
+            setExcluded([...excluded, groupId]);
+        }
+    }
+
     function genLabel() {
         if (way) {
             return <label>
-                <input type='checkbox' disabled={!inheritEnabled}
-                    checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+                <input type='checkbox' disabled={!inheritEnabled()}
+                    checked={enabled()} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
                 {way.name} (wg:
                 <a target='_blank' href={`https://www.openstreetmap.org/relation/${way.id}`}>{way.id}</a>
@@ -87,31 +130,31 @@ export function WayGroupConfig({ id, inheritEnabled }: WayGroupConfigProps): Rea
     }
 
     function hoverEnd() {
-        if (hovering === id) {
+        if (hovering === -id) {
             setHovering(0);
         }
     }
 
-    return <TreeNode id={'g'+id.toString()} initiallyOpen={false}
-        onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
+    return way && <TreeNode id={'wg'+id.toString()} initiallyOpen={false}
+        onMouseEnter={() => setHovering(-id)} onMouseLeave={hoverEnd}>
         { genLabel() }
-        { way?.following.map(w => <WayConfig key={w.id} id={w.id} inheritEnabled={inheritEnabled && enabled} />) }
+        <WayConfig id={way.id} />
+        { way?.following.map(w => <WayConfig key={`wc${w.id}`} id={w.id} />) }
     </TreeNode>;
 }
 
 
 type WayConfigProps = {
     id: number,
-    inheritEnabled: boolean,
 };
 
-export function WayConfig({ id, inheritEnabled }: WayConfigProps): ReactNode {
+export function WayConfig({ id }: WayConfigProps): ReactNode {
     const {
-        hovering, setHovering
+        hovering, setHovering,
+        excluded, setExcluded,
     } = useContext(Context);
 
     const [way, setWay] = useState(undefined as Way | undefined);
-    const [enabled, setEnabled] = useState(true);
 
     useEffect(() => {
         if (!way || way.id !== id) {
@@ -119,11 +162,30 @@ export function WayConfig({ id, inheritEnabled }: WayConfigProps): ReactNode {
         }
     }, [id]);
 
+    function inheritEnabled() {
+        return way && way.parents.every((p) => !excluded.includes(p.id));
+    }
+
+    function enabled() {
+        return way && !excluded.includes(way.id);
+    }
+
+    function setEnabled(state: boolean) {
+        if (!way) { return }
+        const isExcluded = excluded.includes(way.id);
+        if (state && isExcluded) {
+            setExcluded(excluded.filter((id) => id !== way.id));
+        }
+        else if (!state && !isExcluded) {
+            setExcluded([...excluded, way.id]);
+        }
+    }
+
     function genLabel() {
         if (way) {
             return <label>
-                <input type='checkbox' disabled={!inheritEnabled}
-                    checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+                <input type='checkbox' disabled={!inheritEnabled()}
+                    checked={enabled()} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
                 {way.name} (w:
                 <a target='_blank' href={`https://www.openstreetmap.org/relation/${way.id}`}>{way.id}</a>

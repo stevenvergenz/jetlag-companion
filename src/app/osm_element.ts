@@ -62,13 +62,14 @@ export class Relation extends Element {
 
     public get ways(): Way[] {
         return this.data.members
-            .filter(m => m.type === 'way')
-            .map(m => get(m.ref));
+            .map((m) => m.ref)
+            .filter((id, i, arr) => !arr.slice(0, i).includes(id))
+            .map((id) => get(id));
     }
 
     public get wayGroups(): Way[] {
         return this.ways
-            .filter(w => w.previous === undefined);
+            .filter((w) => w.previous === undefined);
     }
 }
 

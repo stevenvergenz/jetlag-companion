@@ -4,6 +4,7 @@ const ENDPOINT = 'https://overpass-api.de/api/interpreter';
 const LOWER_US = '24.41,-125.51,49.61,-66.09';
 
 const cache = new Map<number, Element>();
+const promises = new Map<number, Promise<Element>>();
 
 type OsmQueryResult = {
     version: string,
@@ -42,7 +43,7 @@ export type OsmNode = OsmCommon & {
 
 export type OsmElement = OsmRelation | OsmWay | OsmNode;
 
-export async function getAsync<T extends Element>(id: number): Promise<T> {
+async function getAsyncInternal<T extends Element>(id: number): Promise<T> {
     if (!cache.has(id)) {
         const res = await fetch(ENDPOINT, {
             method: 'POST',
@@ -64,16 +65,28 @@ export async function getAsync<T extends Element>(id: number): Promise<T> {
         }
     }
     if (!cache.has(id)) {
-        throw new Error('Element not found');
+        throw new Error(`Element not found: ${id}`);
     } else {
         return cache.get(id) as T;
     }
 }
 
+export function getAsync<T extends Element>(id: number): Promise<T> {
+    if (promises.has(id)) {
+        return promises.get(id) as Promise<T>;
+    } else {
+        const p = getAsyncInternal(id)
+            .finally(() => {
+                promises.delete(id);
+            });
+        promises.set(id, p);
+        return p as Promise<T>;
+    }
+}
 
 export function get<T extends Element>(id: number): T {
     if (!cache.has(id)) {
-        throw new Error('Element not found');
+        throw new Error(`Element not found: ${id}`);
     } else {
         return cache.get(id) as T;
     }
