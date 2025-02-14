@@ -1,8 +1,9 @@
 import { JSX, useEffect, useState } from 'react';
-import { useMap } from '@vis.gl/react-google-maps';
+import { useMap } from 'react-leaflet';
 import { Relation as OsmRelation, getRelation, OsmElementType } from './overpass_api';
-import { WayGroup } from './way_group';
+//import { WayGroup } from './way_group';
 import { TreeNode } from './tree_node';
+import { WayGroup } from './way_group';
 import { onHover, onUnhover } from './hover_handler';
 
 type Props = {
@@ -10,7 +11,7 @@ type Props = {
 };
 
 export function Relation({ id }: Props): JSX.Element {
-    const map = useMap();
+    //const map = useMap();
     const [relation, setRelation] = useState(undefined as OsmRelation | undefined);
     const [enabled, setEnabled] = useState(true);
 
@@ -32,9 +33,7 @@ export function Relation({ id }: Props): JSX.Element {
         }
     }
 
-    return <TreeNode id={id.toString()} initiallyOpen={true}
-        onMouseEnter={onHover(map, relation?.ways.map(w => w.id))}
-        onMouseLeave={onUnhover(map, relation?.ways.map(w => w.id))}>
+    return <TreeNode id={id.toString()} initiallyOpen={true}>
         { genLabel() }
         { relation?.wayGroups.map(w => <WayGroup key={'wg' + w.id} id={w.id} inheritEnabled={enabled} />) }
     </TreeNode>;

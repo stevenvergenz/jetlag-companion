@@ -1,5 +1,5 @@
 import { JSX, useEffect, useState } from 'react';
-import { useMap } from '@vis.gl/react-google-maps';
+import { useMap } from 'react-leaflet';
 import { Way as OsmWay, getWay } from './overpass_api';
 import { TreeNode } from './tree_node';
 import { Way } from './way';
@@ -11,16 +11,12 @@ type Props = {
 };
 
 export function WayGroup({ id, inheritEnabled }: Props): JSX.Element {
-    const map = useMap();
+    //const map = useMap();
     const [way, setWay] = useState(undefined as OsmWay | undefined);
     const [enabled, setEnabled] = useState(true);
 
     useEffect(() => {
         async function go() {
-            if (!map) {
-                return;
-            }
-    
             // query for way path
             let w = way;
             if (!w || w.id !== id) {
@@ -30,7 +26,7 @@ export function WayGroup({ id, inheritEnabled }: Props): JSX.Element {
         }
         
         go();
-    }, [id, map]);
+    }, [id]);
 
     function genLabel() {
         if (way) {
@@ -47,9 +43,7 @@ export function WayGroup({ id, inheritEnabled }: Props): JSX.Element {
         }
     }
 
-    return <TreeNode id={'g'+id.toString()} initiallyOpen={false}
-        onMouseEnter={onHover(map, way?.following.map(w => w.id))}
-        onMouseLeave={onUnhover(map, way?.following.map(w => w.id))}>
+    return <TreeNode id={'g'+id.toString()} initiallyOpen={false}>
         { genLabel() }
         { way?.following.map(w => <Way key={w.id} id={w.id} inheritEnabled={inheritEnabled && enabled} />) }
     </TreeNode>;

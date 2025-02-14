@@ -1,33 +1,9 @@
 import { JSX, useState, useEffect } from 'react';
-import { useMap } from '@vis.gl/react-google-maps';
 
 import { Relation } from './relation';
 import { TreeNode } from './tree_node';
 
 export function SideBar(): JSX.Element {
-    const map = useMap();
-
-    useEffect(() => {
-        if (!map) { return; }
-        map.data.setStyle(feature => {
-            if ((feature.getProperty('highlightCount') as number ?? 0) > 0) {
-                return {
-                    strokeWeight: 10,
-                    strokeColor: 'red',
-                };
-            } else if (feature.getProperty('enabled')) {
-                return {
-                    strokeWeight: 2,
-                    strokeColor: 'black',
-                };
-            } else {
-                return {
-                    visible: false,
-                }
-            }
-        });
-    }, [map]);
-
     return <div className={
         'w-30 max-w-md overflow-y-auto max-h-screen ' +
         'bg p-4 gap-2 flex flex-col content-stretch'}>
