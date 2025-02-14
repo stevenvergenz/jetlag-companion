@@ -121,7 +121,7 @@ export async function requestAsync(ids: Id[]): Promise<Element[]> {
 }
 
 export function requestTransport(poly: LatLngTuple[]): Promise<Element[]> {
-    const polyStr = poly.flat().join(' ');
+    const polyStr = poly.flatMap(ll => ll.slice(0, 2)).join(' ');
     
     // relation[public_transport=stop_area] describes a group of stops
     //   can have members "platform", "stop_position", "station", etc.
@@ -133,8 +133,14 @@ export function requestTransport(poly: LatLngTuple[]): Promise<Element[]> {
         nwr(poly:"${polyStr}") -> .all;
         nw.all[public_transport=platform] -> .platforms;
         nw.all[public_transport=station] -> .stations;
-        rel.all[public_transport=stop_area] -> .areas;
-        rel.all[type=route] -> .routes;
+        (
+            rel.all(bn.platforms: platform)[public_transport=stop_area];
+            rel.all(bw.platforms: platform)[public_transport=stop_area];
+        ) -> .areas;
+        (
+            rel.all(bn.platforms)[type=route];
+            rel.all(bw.platforms)[type=route];
+        ) -> .routes;
         rel(br.routes)[type=route_master] -> .route_masters;
         (
             .platforms;

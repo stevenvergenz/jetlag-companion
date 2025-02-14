@@ -4,7 +4,7 @@ import { PathOptions } from 'leaflet';
 
 import { TreeNode } from './tree_node';
 import { Context } from './context';
-import { requestStations } from './overpass_api';
+import { getByTransportTypeAsync } from './overpass_cache';
 import { Relation, Way, Node } from './element';
 
 const StationStyle: PathOptions = {
@@ -53,7 +53,13 @@ export function StationMarkers(): ReactNode {
     useEffect(() => {
         async function helper() {
             if (!path || path.length < 2) { return; }
-            const res = await requestStations(path, useTransitStations, busTransferThreshold);
+
+            const platforms = await getByTransportTypeAsync(
+                path, 
+                'platform',
+                { request: true },
+            );
+
             setStations(res);
         }
         helper();
