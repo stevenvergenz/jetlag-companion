@@ -158,6 +158,13 @@ export async function requestStations(
     const polyStr = poly.flat().map(n => n?.toPrecision(6)).join(' ');
     let ids: Id[] = [];
     if (!stationCache.has(polyStr)) {
+        // relation[public_transport=stop_area] describes a group of stops
+        //   can have members "platform", "stop_position", "station", etc.
+        // nw[public_transport=station] is many:many with stop_areas
+        // nw[public_transport=platform] describes a transit stop
+        // relation[type=route] describes a route variant going to a platform
+        // relation[type=route_master] describes a full route with all variants
+
         const stationQuery = `
             node.all[public_transport=station] -> .stations;
             (
@@ -165,6 +172,7 @@ export async function requestStations(
                 .stations;
             ) -> .result;
         `;
+
         const busQuery = `
             node.all[highway='bus_stop'] -> .stops;
             relation(bn.stops)[type='route'][route='bus'] -> .variants;
@@ -175,6 +183,7 @@ export async function requestStations(
                 .variants;
                 .routes;
             ) -> .result;`
+
         const q = `
             node(poly:"${polyStr}") -> .all;
             ${useTransitStations ? stationQuery : ''}
