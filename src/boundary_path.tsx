@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect, useContext } from 'react';
 import { LatLngTuple, LatLngBounds, PathOptions } from 'leaflet';
 import { LayerGroup, Polyline, useMap } from 'react-leaflet';
 
-import { Id, unreversed } from './id';
+import { Id } from './id';
 import { getAsync } from './overpass_api';
 import { Relation, WayGroup, Way } from './osm_element';
 import { Context } from './context';
@@ -88,8 +88,8 @@ export function WayGroupPath({ wayGroup }: WayGroupPathProps): ReactNode {
 
     if (boundaryReady) {
         return wayGroup.children
-            .filter(w => !excluded.includes(unreversed(w.id)))
-            .map(n => <WayPath key={n.id} id={unreversed(n.id)} />);
+            .filter(w => !excluded.includes(w.id))
+            .map(w => <WayPath key={w.id} id={w.id} />);
     }
 }
 
@@ -121,6 +121,7 @@ export function WayPath({ id }: WayPathProps): ReactNode {
         }
 
         const relevantIds = [way.id, ...way.parentIds, ...way.parents.flatMap(wg => [...wg.parentIds])];
+        console.log(relevantIds);
         if (relevantIds.includes(hovering)) {
             setRenderOptions(HoveredStyle);
         }

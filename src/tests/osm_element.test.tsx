@@ -26,11 +26,13 @@ function setup() {
 }
 
 function relation(id: number, members: number[]): Relation {
-    return new Relation(pack({ type: 'relation', id }), {
+    const r = new Relation(pack({ type: 'relation', id }), {
         type: 'relation',
         id,
         members: members.map(id => ({ type: 'way', ref: id, role: 'forward' })),
     });
+    cache.set(r.id, r);
+    return r;
 }
 
 test('wayGroup append forward', () => {
@@ -80,7 +82,7 @@ test('wayGroup bridge append forward', () => {
 
 test('wayGroup bridge prepend forward', () => {
     setup();
-    const r = relation(5, [3, 1, 2]);
+    const r = relation(6, [3, 1, 2]);
     expect(r.wayGroups.size).toBe(1);
     expect(r.children[0].childIds).toMatchObject(['w:1', 'w:2', 'w:3']);
     expect(r.children[0].startsWithNode).toBe('n:1');
@@ -89,7 +91,7 @@ test('wayGroup bridge prepend forward', () => {
 
 test('wayGroup bridge append reverse', () => {
     setup();
-    const r = relation(5, [1, 4, 5]);
+    const r = relation(7, [1, 4, 5]);
     expect(r.wayGroups.size).toBe(1);
     expect(r.children[0].childIds).toMatchObject(['w:1', '-w:5', '-w:4']);
     expect(r.children[0].startsWithNode).toBe('n:1');
@@ -98,9 +100,45 @@ test('wayGroup bridge append reverse', () => {
 
 test('wayGroup bridge prepend reverse', () => {
     setup();
-    const r = relation(5, [3, 6, 5]);
+    const r = relation(8, [3, 6, 5]);
     expect(r.wayGroups.size).toBe(1);
     expect(r.children[0].childIds).toMatchObject(['-w:6', '-w:5', 'w:3']);
     expect(r.children[0].startsWithNode).toBe('n:1');
     expect(r.children[0].endsWithNode).toBe('n:4');
+});
+
+test('parentage', () => {
+    setup();
+    const r = relation(9, [1, 4, 5]);
+    expect(r.childIds.length).toBe(1);
+    expect(r.children.length).toBe(1);
+
+    const wg = r.children[0];
+    expect(wg.parentIds.size).toBe(1);
+    expect(wg.parents.length).toBe(1);
+    expect(wg.childIds.length).toBe(3);
+    expect(wg.children.length).toBe(3);
+
+    const w0 = wg.children[0];
+    expect(w0.parentIds.size).toBe(1);
+    expect(w0.parents.length).toBe(1);
+    expect(w0.childIds.length).toBe(2);
+    expect(w0.children.length).toBe(2);
+
+    const w1 = wg.children[1];
+    expect(w1.parentIds.size).toBe(1);
+    expect(w1.parents.length).toBe(1);
+    expect(w1.childIds.length).toBe(2);
+    expect(w1.children.length).toBe(2);
+
+    const w2 = wg.children[2];
+    expect(w2.parentIds.size).toBe(1);
+    expect(w2.parents.length).toBe(1);
+    expect(w2.childIds.length).toBe(2);
+    expect(w2.children.length).toBe(2);
+
+    const n = w0.children[0];
+    expect(n.parentIds.size).toBe(2);
+    expect(n.parents.length).toBe(2);
+    expect(n.childIds.length).toBe(0);
 });

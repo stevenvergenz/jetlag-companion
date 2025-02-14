@@ -1,6 +1,6 @@
 import { LatLngTuple } from 'leaflet';
 import { Element, Node, Relation, Way } from './osm_element';
-import { Id, pack, packFrom, unpack } from './id';
+import { Id, pack, packFrom, unpack, unreversed } from './id';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';
 
@@ -72,18 +72,19 @@ async function query(query: string): Promise<Element[]> {
         }
     }
 
-    return body.elements.map(e => cache.get(packFrom(e))!);
+    return body.elements.map(e => get(packFrom(e))!);
 }
 
 async function getAsyncInternal(ids: Id[]): Promise<Element[]> {
-    const idParts = ids
+    const promiseIds = ids.filter(id => promises.has(id));
+    const queryIdParts = ids
         .filter(id => !cache.has(id) && !promises.has(id))
         .map(id => unpack(id))
         .filter(iu => iu.type !== 'wayGroup');
-    if (idParts.length > 0) {
-        const relationIds = idParts.filter(p => p.type === 'relation').map(p => p.id);
-        const wayIds = idParts.filter(p => p.type === 'way').map(p => p.id);
-        const nodeIds = idParts.filter(p => p.type === 'node').map(p => p.id);
+    if (queryIdParts.length > 0) {
+        const relationIds = queryIdParts.filter(p => p.type === 'relation').map(p => p.id);
+        const wayIds = queryIdParts.filter(p => p.type === 'way').map(p => p.id);
+        const nodeIds = queryIdParts.filter(p => p.type === 'node').map(p => p.id);
 
         let q = '';
         if (relationIds.length > 0) {
@@ -98,20 +99,16 @@ async function getAsyncInternal(ids: Id[]): Promise<Element[]> {
         q = `(${q});`;
         await query(q);
     }
+
+    if (promiseIds.length > 0) {
+        await Promise.all(promiseIds.map(id => promises.get(id)).filter(p => p !== undefined));
+    }
     
-    return ids.map(id => {
-        const iu = unpack(id);
-        if (iu.type === 'wayGroup') {
-            const rid = pack({ type: 'relation', id: iu.id });
-            return (cache.get(rid) as Relation | undefined)!.wayGroups.get(id)!;
-        }
-        else {
-            return cache.get(id)!;
-        }
-    });
+    return ids.map(id => get(id)!);
 }
 
 export function getAsync(ids: Id[]): Promise<Element[]> {
+    ids = ids.map(id => unreversed(id));
     const queryIds = ids.filter(id => !cache.has(id));
     if (queryIds.length > 0) {
         const p = getAsyncInternal(queryIds)
@@ -131,13 +128,20 @@ export function getAsync(ids: Id[]): Promise<Element[]> {
             return (await promises.get(id)!).find(e => e.id === id)!;
         }
         else {
-            return cache.get(id)!;
+            return get(id)!;
         }
     }));
 }
 
 export function get(id: Id): Element | undefined {
-    return cache.get(id);
+    const idu = unpack(id);
+    if (idu.type === 'wayGroup') {
+        const parentId = pack({ type: 'relation', id: idu.id });
+        return (get(parentId) as Relation | undefined)?.wayGroups.get(id);
+    }
+    else {
+        return cache.get(unreversed(id));
+    }
 }
 
 export async function getStations(poly: LatLngTuple[]): Promise<Node[]> {
