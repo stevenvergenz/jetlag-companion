@@ -61,6 +61,9 @@ async function query(query: string): Promise<Element[]> {
                 cache.set(id, new Relation(id, e));
                 break;
             case 'way':
+                if (id === 'w:909645217') {
+                    console.log('creating', e);
+                }
                 cache.set(id, new Way(id, e));
                 break;
             case 'node':
@@ -72,9 +75,9 @@ async function query(query: string): Promise<Element[]> {
     return body.elements.map(e => cache.get(packFrom(e))!);
 }
 
-async function getAsyncInternal(ids: Id[], recurse = false): Promise<Element[]> {
+async function getAsyncInternal(ids: Id[]): Promise<Element[]> {
     const idParts = ids
-        .filter(id => !cache.has(id))
+        .filter(id => !cache.has(id) && !promises.has(id))
         .map(id => unpack(id))
         .filter(iu => iu.type !== 'wayGroup');
     if (idParts.length > 0) {
@@ -92,8 +95,7 @@ async function getAsyncInternal(ids: Id[], recurse = false): Promise<Element[]> 
         if (nodeIds.length > 0) {
             q += `node(id:${nodeIds.join(',')});`;
         }
-        const recurseQuery = recurse ? '>>;' : '';
-        q = `(${q}); ${recurseQuery}`;
+        q = `(${q});`;
         await query(q);
     }
     
@@ -109,10 +111,10 @@ async function getAsyncInternal(ids: Id[], recurse = false): Promise<Element[]> 
     });
 }
 
-export function getAsync(ids: Id[], recurse = false): Promise<Element[]> {
-    const queryIds = ids.filter(id => !cache.has(id) || recurse && !cache.get(id)!.complete);
+export function getAsync(ids: Id[]): Promise<Element[]> {
+    const queryIds = ids.filter(id => !cache.has(id));
     if (queryIds.length > 0) {
-        const p = getAsyncInternal(queryIds, recurse)
+        const p = getAsyncInternal(queryIds)
             .finally(() => {
                 for (const id of queryIds) {
                     promises.delete(id);

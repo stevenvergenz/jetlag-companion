@@ -120,7 +120,7 @@ export function WayPath({ id }: WayPathProps): ReactNode {
             console.log(way);
         }
 
-        const relevantIds = [way.id, ...way.parentIds, ...way.parents.flatMap(wg => wg.parentIds)];
+        const relevantIds = [way.id, ...way.parentIds, ...way.parents.flatMap(wg => [...wg.parentIds])];
         if (relevantIds.includes(hovering)) {
             setRenderOptions(HoveredStyle);
         }
