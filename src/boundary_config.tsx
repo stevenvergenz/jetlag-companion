@@ -1,7 +1,8 @@
 import { ReactNode, useContext, useEffect, useState } from 'react';
 
+import { Id, pack } from './id';
 import { getAsync } from './overpass_api';
-import { Relation, Way } from './osm_element';
+import { Relation, Way, WayGroup } from './osm_element';
 import { TreeNode } from './tree_node';
 import { Context } from './context';
 
@@ -14,8 +15,13 @@ export function BoundaryConfig(): ReactNode {
     const [newId, setNewId] = useState(undefined as number | undefined);
 
     function addRelation() {
-        if (newId && !included.includes(newId)) {
-            setIncluded([...included, newId]);
+        if (!newId) {
+            return;
+        }
+
+        const id = pack({ type: 'relation', id: newId });
+        if (!included.includes(id)) {
+            setIncluded([...included, id]);
             setNewId(undefined);
         }
     }
@@ -33,12 +39,12 @@ export function BoundaryConfig(): ReactNode {
                 <button type='button' onClick={save}>Save</button>
             </div>
         </TreeNode>
-        { included.map(id => <RelationConfig key={`rc${id}`} id={id} />) }
+        { included.map(id => <RelationConfig key={`c${id}`} id={id} />) }
     </TreeNode>;
 }
 
 type RelationConfigProps = {
-    id: number,
+    id: Id,
 };
 
 export function RelationConfig({ id }: RelationConfigProps): ReactNode {
@@ -52,7 +58,7 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
 
     useEffect(() => {
         if (boundaryReady && (!relation || relation.id !== id)) {
-            getAsync('relation', [id]).then(([r]) => setRelation(r));
+            getAsync([id]).then(([r]) => setRelation(r as Relation));
         }
     }, [id, relation, boundaryReady]);
 
@@ -86,92 +92,68 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
 
     function hoverEnd() {
         if (hovering === id) {
-            setHovering(0);
+            setHovering('');
         }
     }
 
     return <TreeNode id={id.toString()} initiallyOpen={false}
         onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
         { genLabel() }
-        { relation?.wayGroups.map(w => <WayGroupConfig key={'wgc' + w.id} id={w.id} />) }
+        { relation?.children.map(wg => <WayGroupConfig key={'c' + wg.id} wayGroup={wg} />) }
     </TreeNode>;
 }
 
 
 type WayGroupConfigProps = {
-    id: number,
+    wayGroup: WayGroup,
 };
 
-export function WayGroupConfig({ id }: WayGroupConfigProps): ReactNode {
+export function WayGroupConfig({ wayGroup }: WayGroupConfigProps): ReactNode {
     const {
-        boundaryReady,
         hovering, setHovering,
         excluded, setExcluded,
     } = useContext(Context);
 
-    const [way, setWay] = useState(undefined as Way | undefined);
     const [inheritEnabled, setInheritEnabled] = useState(true);
     const [enabled, setEnabledLocal] = useState(true);
 
     useEffect(() => {
-        if (boundaryReady && (!way || way.id !== id)) {
-            getAsync('way', [id]).then(([w]) => setWay(w));
-        }
-    }, [id, way, boundaryReady]);
-
-    useEffect(() => {
-        const groupId = -(way?.id ?? 0);
-        if (way) {
-            setInheritEnabled(way.parents.every((p) => !excluded.includes(p.id)));
-            setEnabledLocal(!excluded.includes(groupId));
-        }
-    }, [way, excluded])
+        setInheritEnabled(wayGroup.parentIds.every(pid => !excluded.includes(pid)));
+        setEnabledLocal(!excluded.includes(wayGroup.id));
+    }, [wayGroup, excluded])
 
 
     function setEnabled(state: boolean) {
-        const groupId = -(way?.id ?? 0);
-        if (!way) { return }
-        const isExcluded = excluded.includes(groupId);
+        const isExcluded = excluded.includes(wayGroup.id);
         if (state && isExcluded) {
-            setExcluded(excluded.filter((id) => id !== groupId));
+            setExcluded(excluded.filter((id) => id !== wayGroup.id));
         }
         else if (!state && !isExcluded) {
-            setExcluded([...excluded, groupId]);
-        }
-    }
-
-    function genLabel() {
-        if (way) {
-            return <label>
-                <input type='checkbox' disabled={!inheritEnabled}
-                    checked={enabled} onChange={e => setEnabled(e.target.checked)} />
-                &nbsp;
-                {way.name} (wg:
-                <a target='_blank' href={`https://www.openstreetmap.org/relation/${way.id}`}>{way.id}</a>
-                )
-            </label>;
-        } else {
-            return <label>&lt;loading&gt;</label>;
+            setExcluded([...excluded, wayGroup.id]);
         }
     }
 
     function hoverEnd() {
-        if (hovering === -id) {
-            setHovering(0);
+        if (hovering === wayGroup.id) {
+            setHovering('');
         }
     }
 
-    return way && <TreeNode id={'wg'+id.toString()} initiallyOpen={false}
-        onMouseEnter={() => setHovering(-id)} onMouseLeave={hoverEnd}>
-        { genLabel() }
-        <WayConfig id={way.id} />
-        { way?.following.map(w => <WayConfig key={`wc${w.id}`} id={w.id} />) }
+    return <TreeNode id={`c${wayGroup.id}`} initiallyOpen={false}
+        onMouseEnter={() => setHovering(wayGroup.id)} onMouseLeave={hoverEnd}>
+        <label>
+            <input type='checkbox' disabled={!inheritEnabled}
+                checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+            &nbsp;
+            {wayGroup.name}
+        </label>
+        { wayGroup.children.map(w => <WayConfig key={`c${w.id}`} id={w.id} />) }
     </TreeNode>;
 }
 
 
 type WayConfigProps = {
-    id: number,
+    id: Id,
 };
 
 export function WayConfig({ id }: WayConfigProps): ReactNode {
@@ -187,7 +169,7 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
 
     useEffect(() => {
         if (boundaryReady && (!way || way.id !== id)) {
-            getAsync('way', [id]).then(([w]) => setWay(w));
+            getAsync([id]).then(([w]) => setWay(w as Way));
         }
     }, [id, way, boundaryReady]);
 
@@ -228,7 +210,7 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
 
     function hoverEnd() {
         if (hovering === id) {
-            setHovering(0);
+            setHovering('');
         }
     }
 

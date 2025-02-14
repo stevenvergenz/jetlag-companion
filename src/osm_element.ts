@@ -1,24 +1,33 @@
 import { OsmElement, OsmNode, OsmRelation, OsmWay, get } from "./overpass_api";
-import { Id, packFrom } from './id';
+import { Id, pack, unpack, reverse, unreversed } from './id';
 
 export abstract class Element {
-    protected static parentIds = new Map<Id, Id[]>();
 
     public readonly id: Id;
 
-    protected readonly _data: OsmElement;
+    protected readonly _data?: OsmElement;
     public abstract get data(): OsmElement;
 
-    protected readonly _parentIds = new Set<Id>();
+    public parentIds = [] as Id[];
+    protected getParents() {
+        return this.parentIds
+            .map(id => get(id))
+            .filter(e => e !== undefined);
+    }
     public abstract get parents(): Element[];
 
-    protected readonly _childIds = new Set<Id>();
+    public childIds = [] as Id[];
+    protected getChildren() {
+        return this.childIds
+            .map(id => get(id))
+            .filter(e => e !== undefined);
+    }
     public abstract get children(): Element[];
 
     public get name(): string {
-        return this._data.tags?.['name'] 
-            ?? this._data.tags?.['description'] 
-            ?? this._data.tags?.['ref'] 
+        return this._data?.tags?.['name'] 
+            ?? this._data?.tags?.['description'] 
+            ?? this._data?.tags?.['ref'] 
             ?? '<unspecified>';
     }
 
@@ -30,23 +39,36 @@ export abstract class Element {
         return [this.id, ...this.children.flatMap(c => c?.completeIds)];
     }
 
-    public constructor(id: Id, data: OsmElement) {
+    public constructor(id: Id, data?: OsmElement) {
         this.id = id;
         this._data = data;
     }
 
+    public addChildUnique(id: Id) {
+        if (id && !this.childIds.includes(id)) {
+            this.childIds.push(id);
+        }
+    }
 }
 
-export class Relation extends Element {
-    public wayGroups: WayGroup[] = [];
+abstract class GenericElement<P extends Element, C extends Element> extends Element {
+    public get parents(): P[] {
+        return this.getParents() as P[];
+    }
+
+    public get children(): C[] {
+        return this.getChildren() as C[];
+    }
+}
+
+export class Relation extends GenericElement<Element, WayGroup> {
+    public readonly wayGroups = new Map<Id, WayGroup>();
 
     public constructor(id: Id, data: OsmRelation) {
         super(id, data);
 
         for (const w of this.data.members.filter(m => m.type === 'way')) {
-            const memberId = packFrom({ type: w.type, id: w.ref });
-            Element.parentIds.set(memberId, [...(Element.parentIds.get(memberId) ?? []), this.id]);
-            this._childIds.add(memberId);
+            const memberId = pack({ type: w.type, id: w.ref });
             WayGroup.setInterest(memberId, this);
         }
     }
@@ -55,18 +77,15 @@ export class Relation extends Element {
         return this._data as OsmRelation;
     }
 
-    public get parents() {
-        return [];
-    }
-
-    public get children(): Way[] {
-        return [...this._childIds]
-            .map((id) => get(id) as Way)
-            .filter((w) => w !== undefined);
+    public get children(): WayGroup[] {
+        return this.childIds
+            .map(id => this.wayGroups.get(id))
+            .filter(wg => wg !== undefined);
     }
 }
 
-export class WayGroup {
+export class WayGroup extends GenericElement<Relation, Way> {
+    private static lastIndices: { [id: Id]: number } = {};
     private static interests = new Map<Id, Relation[]>();
     private static knownIds = new Set<Id>();
 
@@ -87,26 +106,38 @@ export class WayGroup {
     }
 
     private static fulfillInterest(way: Way, relation: Relation) {
-        const thisMembers = relation.data.members.filter(m => m.type === 'way' && m.ref === way.id);
-        if (thisMembers.length === 0) {
+        /** All roles for the fulfilled way */
+        const roles = new Set(relation.data.members
+            .filter(m => pack({ type: m.type, id: m.ref }) === way.id)
+            .map(m => m.role));
+        if (roles.size === 0) {
             return;
         }
 
-        for (const thisMember of thisMembers) {
-            const added = relation.wayGroups.filter(wg => wg.role === thisMember.role && wg.add(way));
+        for (const role of roles) {
+            /** The list of known way groups that successfully added the fulfilled way */
+            const added = relation.children.filter(wg => wg.role === role && wg.add(way));
+
+            // no existing way group will take it, add a new one
             if (added.length === 0) {
-                relation.wayGroups.push(new WayGroup(relation.wayGroups.length, thisMember.role, way));
+                const wg = new WayGroup(relation.id, role, way);
+                relation.wayGroups.set(wg.id, wg);
+                relation.addChildUnique(wg.id);
                 continue;
             }
 
+            // check if the new way bridged two existing way groups
             for (let i = 0; i < added.length - 1; i++) {
+                /** The older of two way groups */
                 const senior = added[i];
                 let junior: WayGroup | undefined;
-                if (Math.abs(senior.ways[0]) === way.id) {
+                if (unreversed(senior.childIds[0]) === way.id) {
+                    // the newer way group connects to the beginning of the older
                     junior = added.slice(i+1)
                         .find(wg => [wg.startsWithNode, wg.endsWithNode].includes(senior.startsWithNode));
                 }
                 else {
+                    /// the newer way group connects to the end of the older
                     junior = added.slice(i+1).
                         find(wg => [wg.startsWithNode, wg.endsWithNode].includes(senior.endsWithNode));
                 }
@@ -115,43 +146,47 @@ export class WayGroup {
                     continue;
                 }
 
-                const juniorIndex = relation.wayGroups.indexOf(junior);
-
                 if (senior.endsWithNode === junior.startsWithNode) {
-                    senior.ways.push(...junior.ways.slice(1));
+                    senior.childIds.push(...junior.childIds.slice(1));
                     senior.endsWithNode = junior.endsWithNode;
                 }
                 else if (junior.endsWithNode === senior.startsWithNode) {
-                    senior.ways.unshift(...junior.ways.slice(0, -1));
+                    senior.childIds.unshift(...junior.childIds.slice(0, -1));
                     senior.startsWithNode = junior.startsWithNode;
                 }
                 else if (junior.startsWithNode === senior.startsWithNode) {
-                    senior.ways.unshift(...junior.ways.slice(1).reverse().map(w => -w));
+                    senior.childIds.unshift(...junior.childIds.slice(1).reverse().map(w => reverse(w)));
                     senior.startsWithNode = junior.endsWithNode;
                 }
                 else if (junior.endsWithNode === senior.endsWithNode) {
-                    senior.ways.push(...junior.ways.slice(0, -1).reverse().map(w => -w));
+                    senior.childIds.push(...junior.childIds.slice(0, -1).reverse().map(w => reverse(w)));
                     senior.endsWithNode = junior.startsWithNode;
                 }
 
-                relation.wayGroups.splice(juniorIndex, 1);
-                relation.wayGroups.slice(juniorIndex).forEach((wg, i) => wg.id = juniorIndex + i);
+                relation.wayGroups.delete(junior.id);
+                relation.childIds = relation.childIds.filter(id => id !== junior.id);
             }
         }
     }
 
-    public id: number;
     public readonly role: string;
-    public readonly ways: number[];
-    public startsWithNode: number;
-    public endsWithNode: number;
+    public startsWithNode: Id;
+    public endsWithNode: Id;
 
-    public constructor(id: number, role: string, ...ways: Way[]) {
-        this.id = id;
+    public get data(): never {
+        throw new Error("WayGroups don't have data");
+    }
+
+    public constructor(relationId: Id, role: string, ...ways: Way[]) {
+        const rid = unpack(relationId);
+        const nextOffset = WayGroup.lastIndices[relationId] ?? 0;
+        WayGroup.lastIndices[relationId] = nextOffset;
+        super(pack({ type: 'wayGroup', id: rid.id, offset: nextOffset }), undefined);
+
+        this.parentIds.push(relationId);
         this.role = role;
-        this.ways = [];
-        this.startsWithNode = NaN;
-        this.endsWithNode = NaN;
+        this.startsWithNode = '';
+        this.endsWithNode = '';
 
         for (const w of ways) {
             if (!this.add(w)) {
@@ -161,26 +196,33 @@ export class WayGroup {
     }
 
     public add(way: Way): boolean {
-        if (this.ways.length === 0) {
-            this.ways.push(way.id);
-            this.startsWithNode = way.data.nodes[0];
-            this.endsWithNode = way.data.nodes[way.data.nodes.length - 1];
+        const firstNode = pack({ type: 'node', id: way.data.nodes[0] });
+        const lastNode = pack({ type: 'node', id: way.data.nodes[way.data.nodes.length - 1] });
+        if (this.childIds.length === 0) {
+            this.childIds.push(way.id);
+            this.startsWithNode = firstNode;
+            this.endsWithNode = lastNode;
+            way.parentIds.push(this.id);
         }
-        else if (this.endsWithNode === way.data.nodes[0]) {
-            this.ways.push(way.id);
-            this.endsWithNode = way.data.nodes[way.data.nodes.length - 1];
+        else if (this.endsWithNode === firstNode) {
+            this.childIds.push(way.id);
+            this.endsWithNode = lastNode;
+            way.parentIds.push(this.id);
         }
-        else if (this.startsWithNode === way.data.nodes[way.data.nodes.length - 1]) {
-            this.ways.unshift(way.id);
-            this.startsWithNode = way.data.nodes[0];
+        else if (this.startsWithNode === lastNode) {
+            this.childIds.unshift(way.id);
+            this.startsWithNode = firstNode;
+            way.parentIds.push(this.id);
         }
-        else if (this.startsWithNode === way.data.nodes[0]) {
-            this.ways.unshift(-way.id);
-            this.startsWithNode = way.data.nodes[way.data.nodes.length - 1];
+        else if (this.startsWithNode === firstNode) {
+            this.childIds.unshift(reverse(way.id));
+            this.startsWithNode = lastNode;
+            way.parentIds.push(this.id);
         }
-        else if (this.endsWithNode === way.data.nodes[way.data.nodes.length - 1]) {
-            this.ways.push(-way.id);
-            this.endsWithNode = way.data.nodes[0];
+        else if (this.endsWithNode === lastNode) {
+            this.childIds.push(reverse(way.id));
+            this.endsWithNode = firstNode;
+            way.parentIds.push(this.id);
         }
         else {
             return false;
@@ -190,49 +232,38 @@ export class WayGroup {
     }
 }
 
-export class Way extends Element {
-    public constructor(data: OsmWay) {
-        super(data);
+export class Way extends GenericElement<WayGroup, Node> {
+    public constructor(id: Id, data: OsmWay) {
+        super(id, data);
 
         for (const n of this.data.nodes) {
-            Element.parentIds.set(n, [...(Element.parentIds.get(n) ?? []), this.id]);
+            const nodeId = pack({ type: 'node', id: n });
+            const node = get(nodeId);
+            if (node) {
+                node.parentIds.push(this.id);
+            }
+            else {
+                Node.parentIds.set(nodeId, [...(Node.parentIds.get(nodeId) ?? []), this.id]);
+            }
+            
+            this.addChildUnique(nodeId);
         }
     }
 
     public get data() { return this._data as OsmWay; }
-
-    public get key() {
-        return `w:${this.id}`;
-    }
-
-    public get parents(): Relation[] {
-        return Element.parentIds.get(this.id)?.map(pid => get('relation', pid)!) ?? [];
-    }
-
-    public get children(): Node[] {
-        return this.data.nodes
-            .map(n => get('node', n)!)
-            .filter(n => n !== undefined);
-    }
 }
 
-export class Node extends Element {
-    public constructor(data: OsmNode) {
-        super(data);
+export class Node extends GenericElement<Way, Element> {
+    public static parentIds = new Map<Id, Id[]>();
+
+    public constructor(id: Id, data: OsmNode) {
+        super(id, data);
+        this.parentIds = Node.parentIds.get(id) ?? [];
+        Node.parentIds.delete(id);
     }
 
-    public get data() { return this._data as OsmNode; }
-
-    public get key() {
-        return `n:${this.id}`;
-    }
-
-    public get parents(): Way[] {
-        return Element.parentIds.get(this.id)!.map(pid => get('way', pid)!) ?? [];
-    }
-
-    public get children() {
-        return [];
+    public get data() {
+        return this._data as OsmNode;
     }
 
     public get lat() { return this.data.lat; }

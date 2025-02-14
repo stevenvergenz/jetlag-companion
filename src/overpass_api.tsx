@@ -55,15 +55,16 @@ async function query(query: string): Promise<Element[]> {
     const body = await res.json() as OsmQueryResult;
 
     for (const e of body.elements) {
+        const id = packFrom(e);
         switch (e.type) {
             case 'relation':
-                cache.set(packFrom(e), new Relation(e));
+                cache.set(id, new Relation(id, e));
                 break;
             case 'way':
-                cache.set(packFrom(e), new Way(e));
+                cache.set(id, new Way(id, e));
                 break;
             case 'node':
-                cache.set(packFrom(e), new Node(e));
+                cache.set(id, new Node(id, e));
                 break;
         }
     }
@@ -72,7 +73,10 @@ async function query(query: string): Promise<Element[]> {
 }
 
 async function getAsyncInternal(ids: Id[], recurse = false): Promise<Element[]> {
-    const idParts = ids.filter(id => !cache.has(id)).map(id => unpack(id));
+    const idParts = ids
+        .filter(id => !cache.has(id))
+        .map(id => unpack(id))
+        .filter(iu => iu.type !== 'wayGroup');
     if (idParts.length > 0) {
         const relationIds = idParts.filter(p => p.type === 'relation').map(p => p.id);
         const wayIds = idParts.filter(p => p.type === 'way').map(p => p.id);

@@ -1,12 +1,14 @@
 import { createContext, ReactNode, useEffect, useState } from 'react';
 import { LatLngTuple } from 'leaflet';
-import {  getAsync } from './overpass_api';
+import { getAsync } from './overpass_api';
+import { Id, pack } from './id';
+import { Relation, Way } from './osm_element';
 
 type Content = {
-    included: number[],
-    setIncluded: (n: number[]) => void,
-    excluded: number[],
-    setExcluded: (n: number[]) => void,
+    included: Id[],
+    setIncluded: (n: Id[]) => void,
+    excluded: Id[],
+    setExcluded: (n: Id[]) => void,
 
     editingBoundary: boolean,
     setEditingBoundary: (b: boolean) => void,
@@ -15,8 +17,8 @@ type Content = {
     boundary: LatLngTuple[],
     setBoundary: (b: LatLngTuple[]) => void,
 
-    hovering: number,
-    setHovering: (n: number) => void,
+    hovering: Id,
+    setHovering: (n: Id) => void,
 
     save: () => void,
 };
@@ -34,7 +36,7 @@ const dummyContent: Content = {
     boundary: [],
     setBoundary: () => {},
 
-    hovering: 0,
+    hovering: '',
     setHovering: () => {},
 
     save: () => {},
@@ -44,31 +46,31 @@ export const Context = createContext(dummyContent as Content);
 
 export function ContextProvider({ children }: { children: ReactNode }) {
     const [included, setIncluded] = useState(
-        JSON.parse(window.localStorage.getItem('boundary_included') ?? '[]') as number[]);
+        JSON.parse(window.localStorage.getItem('boundary_included') ?? '[]') as Id[]);
     const [excluded, setExcluded] = useState(
-        JSON.parse(window.localStorage.getItem('boundary_excluded') ?? '[]') as number[]);
+        JSON.parse(window.localStorage.getItem('boundary_excluded') ?? '[]') as Id[]);
     const [editingBoundary, setEditingBoundary] = useState(false);
     const [boundaryReady, setBoundaryReady] = useState(false);
     const [boundary, setBoundary] = useState([] as LatLngTuple[]);
-    const [hovering, setHovering] = useState(0);
+    const [hovering, setHovering] = useState('');
 
     useEffect(() => {
         async function helper() {
             setBoundaryReady(false);
 
-            const relations = await getAsync('relation', included.filter(id => !excluded.includes(id)));
+            const relations = (await getAsync(included.filter(id => !excluded.includes(id)))) as Relation[];
 
             const wayIds = relations.flatMap(r => 
                 r.data.members
                     .filter(m => m.type === 'way')
-                    .map(m => m.ref)
+                    .map(m => pack({ type: 'way', id: m.ref }))
             );
-            const ways = await getAsync('way', wayIds);
+            const ways = (await getAsync(wayIds)) as Way[];
 
             const nodeIds = ways
                 .filter(w => !excluded.includes(w.id))
-                .flatMap(w => w.data.nodes);
-            await getAsync('node', nodeIds);
+                .flatMap(w => w.childIds);
+            await getAsync(nodeIds);
 
             setBoundaryReady(true);
         }

@@ -2,6 +2,7 @@ import { ReactNode, useState, useEffect, useContext } from 'react';
 import { LatLngTuple, LatLngBounds, PathOptions } from 'leaflet';
 import { LayerGroup, Polyline, useMap } from 'react-leaflet';
 
+import { Id } from './id';
 import { getAsync } from './overpass_api';
 import { Relation, Way } from './osm_element';
 import { Context } from './context';
@@ -34,10 +35,11 @@ export function BoundaryLayer(): ReactNode {
     
             const bounds = new LatLngBounds(
                 // loaded enabled relations
-                (await getAsync('relation', included.filter(id => !excluded.includes(id))))
+                (await getAsync(included.filter(id => !excluded.includes(id))) as Relation[])
+                // enabled way groups
+                .flatMap(r => r.children.filter(wg => !excluded.includes(wg.id)))
                 // enabled ways
-                .flatMap(r => r.children)
-                .filter(w => !excluded.includes(w.id) && !excluded.includes(-w.first.id))
+                .flatMap(wg => wg.children.filter(w => !excluded.includes(w.id)))
                 // nodes
                 .flatMap(w => w.children)
                 // convert to LatLngTuple
@@ -53,13 +55,13 @@ export function BoundaryLayer(): ReactNode {
 
     if (editingBoundary && boundaryReady) {
         return <LayerGroup>
-            {included.map(id => <RelationPath key={`rp${id}`} id={id} />)}
+            {included.map(id => <RelationPath key={id} id={id} />)}
         </LayerGroup>;
     }
 }
 
 type RelationPathProps = {
-    id: number,
+    id: Id,
 };
 export function RelationPath({ id }: RelationPathProps): ReactNode {
     const { excluded } = useContext(Context);
@@ -67,19 +69,19 @@ export function RelationPath({ id }: RelationPathProps): ReactNode {
 
     useEffect(() => {
         if (!relation || relation.id !== id) {
-            getAsync('relation', [id]).then(([r]) => setRelation(r));
+            getAsync([id]).then(([r]) => setRelation(r as Relation));
         }
     }, [id, relation]);
 
     return <>
         { relation
             && !excluded.includes(relation.id) 
-            && relation.children.map(w => <WayPath key={`wp${w.id}`} id={w.id} />) }
+            && relation.children.map(w => <WayPath key={w.id} id={w.id} />) }
     </>;
 }
 
 type WayPathProps = {
-    id: number,
+    id: Id,
 };
 export function WayPath({ id }: WayPathProps): ReactNode {
     const {
@@ -90,7 +92,7 @@ export function WayPath({ id }: WayPathProps): ReactNode {
 
     useEffect(() => {
         if (boundaryReady && (!way || way.id !== id)) {
-            getAsync('way', [id]).then(([w]) => setWay(w));
+            getAsync([id]).then(([w]) => setWay(w as Way));
         }
     }, [id, way, boundaryReady]);
 
@@ -99,7 +101,7 @@ export function WayPath({ id }: WayPathProps): ReactNode {
             return DisabledStyle;
         }
 
-        const relevantIds = [way.id, -way.first.id, ...way.parents.map((p) => p.id)];
+        const relevantIds = [way.id, ...way.parentIds, ...way.parents.flatMap(wg => wg.parentIds)];
         if (relevantIds.includes(hovering)) {
             return HoveredStyle;
         }

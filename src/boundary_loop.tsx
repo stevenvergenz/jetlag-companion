@@ -3,8 +3,9 @@ import { LatLngBounds, LatLngExpression, LatLngTuple, Map as LMap } from 'leafle
 import { LayerGroup, Polygon, useMap } from 'react-leaflet';
 import Flatbush from 'flatbush';
 
+import { Id, reverse, isReversed, unreversed } from './id';
 import { getAsync } from './overpass_api';
-import { Relation, Way } from './osm_element';
+import { Relation, WayGroup, Way } from './osm_element';
 import { Context } from './context';
 
 export const Vec2 = {
@@ -18,10 +19,10 @@ export const Vec2 = {
 };
 
 type Terminus = {
-    id: number,
+    id: Id,
     pt: LatLngTuple,
     vec: LatLngTuple,
-    continuedBy?: number,
+    continuedBy?: Id,
 };
 
 type EndpointMatch = {
@@ -32,16 +33,16 @@ type EndpointMatch = {
 };
 
 type WayLeg = {
-    id: number,
+    id: Id,
     termini: { start: Terminus, end: Terminus},
     path: LatLngTuple[],
 };
 
 type RelationLeg = {
-    id: number,
+    id: Id,
     searchTree: Flatbush,
     pathSegments: PathSegment[],
-    intersections: Map<number, Intersection>,
+    intersections: Map<Id, Intersection>,
 }
 
 type PathSegment = {
@@ -64,27 +65,27 @@ const MaxDistanceMeters = 500;
 const MaxDot = -0.5;
 
 async function generateBoundaryLoopPath(
-    included: number[], excluded: number[], map: LMap
+    included: Id[], excluded: Id[], map: LMap
 ): Promise<LatLngTuple[] | undefined> {
     const ids = included.filter(id => !excluded.includes(id));
-    const rs = await getAsync('relation', ids);
-    return mergeRelations(rs);
+    const rs = await getAsync(ids);
+    return await mergeRelations(rs as Relation[]);
 
-    function mergeRelations(relations: Relation[]): LatLngTuple[] | undefined {
+    async function mergeRelations(relations: Relation[]): Promise<LatLngTuple[] | undefined> {
+        const paths = await Promise.all(relations.map(r => calcRelationPath(r)));
         const legs = relations
-            .map(r => {
-                const path = calcRelationPath(r);
+            .map((r, i) => {
                 const pathSegments = [] as PathSegment[];
-                const searchTree = new Flatbush(path.length - 1);
-                for (let i = 0; i < path.length - 1; i++) {
+                const searchTree = new Flatbush(paths[i].length - 1);
+                for (let j = 0; j < paths[j].length - 1; j++) {
                     const seg = {
-                        start: path[i],
-                        end: path[i+1],
+                        start: paths[j][j],
+                        end: paths[j][j+1],
                         bounds: [
-                            Math.min(path[i][0], path[i+1][0]),
-                            Math.min(path[i][1], path[i+1][1]),
-                            Math.max(path[i][0], path[i+1][0]),
-                            Math.max(path[i][1], path[i+1][1]),
+                            Math.min(paths[i][j][0], paths[i][j+1][0]),
+                            Math.min(paths[i][j][1], paths[i][j+1][1]),
+                            Math.max(paths[i][j][0], paths[i][j+1][0]),
+                            Math.max(paths[i][j][1], paths[i][j+1][1]),
                         ],
                     } as PathSegment;
                     pathSegments.push(seg);
@@ -102,7 +103,7 @@ async function generateBoundaryLoopPath(
             .reduce((map, leg) => {
                 map.set(leg.id, leg);
                 return map;
-            }, new Map<number, RelationLeg>());
+            }, new Map<Id, RelationLeg>());
 
         for (const leg of legs.values()) {
             for (const other of [...legs.values()].filter(o => o.id !== leg.id && !leg.intersections.has(o.id))) {
@@ -126,7 +127,7 @@ async function generateBoundaryLoopPath(
         }
 
         const mergedPath = [] as LatLngTuple[];
-        const addedIds = new Set<number>();
+        const addedIds = new Set<Id>();
 
         /** The ID of the path being added to the merged path */
         let id = legs.keys().next().value!;
@@ -192,32 +193,33 @@ async function generateBoundaryLoopPath(
         return [intersectX, intersectY];
     }
     
-    function calcRelationPath(relation: Relation): LatLngTuple[] {
-        const legs = relation.wayGroups
-            .filter(w => !excluded.includes(-w.id))
-            .map(w => {
-                const path = calcWayGroupPath(w);
+    async function calcRelationPath(relation: Relation): Promise<LatLngTuple[]> {
+        const wgs = relation.children
+            .filter(w => !excluded.includes(w.id));
+        const paths = await Promise.all(wgs.map(wg => calcWayGroupPath(wg)));
+        const legs = wgs
+            .map((wg, i) => {
                 return {
-                    id: w.id,
+                    id: wg.id,
                     termini: {
                         start: {
-                            id: w.id,
-                            pt: path[0],
-                            vec: Vec2.normalize(Vec2.sub(path[0], path[1])),
+                            id: wg.id,
+                            pt: paths[i][0],
+                            vec: Vec2.normalize(Vec2.sub(paths[i][0], paths[i][1])),
                         } as Terminus,
                         end: {
-                            id: -w.id,
-                            pt: path[path.length - 1],
-                            vec: Vec2.normalize(Vec2.sub(path[path.length - 1], path[path.length - 2])),
+                            id: reverse(wg.id),
+                            pt: paths[i][paths[i].length - 1],
+                            vec: Vec2.normalize(Vec2.sub(paths[i][paths[i].length - 1], paths[i][paths[i].length - 2])),
                         } as Terminus,
                     },
-                    path,
+                    path: paths[i],
                 } as WayLeg;
             })
             .reduce((map, leg) => {
                 map.set(leg.id, leg);
                 return map;
-            }, new Map<number, WayLeg>());
+            }, new Map<Id, WayLeg>());
     
         // compare each end of each way group to every other end and match them by distance and orientation
     
@@ -234,7 +236,7 @@ async function generateBoundaryLoopPath(
             } as EndpointMatch;
     
             // for each end of every other way group
-            for (const other of termini.filter(e => e.id !== ref.id && e.id !== -ref.id)) {
+            for (const other of termini.filter(e => e.id !== unreversed(ref.id))) {
                 // distance in meters between endpoints (0 is perfect match)
                 const dist = map.distance(ref.pt, other.pt);
                 // dot product of vectors of the ends (-1 is perfect match)
@@ -266,7 +268,7 @@ async function generateBoundaryLoopPath(
         while (nextTerminusId) {
             // the terminus is at the start of a leg
             // so add leg nodes in order and continue with leg end terminus
-            if (nextTerminusId > 0) {
+            if (!isReversed(nextTerminusId)) {
                 const leg = legs.get(nextTerminusId)!;
                 mergedPath.push(...leg.path);
                 nextTerminusId = leg.termini.end.continuedBy;
@@ -274,7 +276,7 @@ async function generateBoundaryLoopPath(
             // the terminus is at the end of a leg
             // so add leg nodes in reverse and continue with leg start terminus
             else {
-                const leg = legs.get(-nextTerminusId)!;
+                const leg = legs.get(reverse(nextTerminusId))!;
                 mergedPath.push(...leg.path.reverse());
                 nextTerminusId = leg.termini.start.continuedBy;
             }
@@ -283,19 +285,20 @@ async function generateBoundaryLoopPath(
         return mergedPath;
     }
     
-    function calcWayGroupPath(way: Way): LatLngTuple[] {
-        if (excluded.includes(way.id) && !way.next) {
-            return [];
+    async function calcWayGroupPath(wg: WayGroup): Promise<LatLngTuple[]> {
+        const mergedPath = [] as LatLngTuple[];
+        for (const id of wg.childIds.filter(id => !excluded.includes(id))) {
+            const path = await calcWayPath(id);
+            mergedPath.push(...path.slice(mergedPath.length > 0 ? 1 : 0))
         }
-        if (excluded.includes(way.id) && way.next) {
-            return calcWayGroupPath(way.next);
-        }
-    
-        let path = way.children.map(n => [n.lat, n.lon] as LatLngTuple);
-        if (way.next) {
-            path = path.concat(calcWayGroupPath(way.next).slice(1));
-        }
-        return path;
+
+        return mergedPath;
+    }
+
+    async function calcWayPath(id: Id): Promise<LatLngTuple[]> {
+        const way = (await getAsync([id]))[0] as Way;
+        const path = way.children.map(n => [n.lat, n.lon] as LatLngTuple);
+        return isReversed(id) ? path.reverse() : path;
     }
 }
 
