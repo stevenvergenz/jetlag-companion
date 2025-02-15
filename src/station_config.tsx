@@ -94,21 +94,19 @@ class StationGroup {
 
 export function StationConfig(): ReactNode {
     const {
-        stations: {
-            show, setShow,
+            showStations, setShowStations,
             busRouteThreshold, setBusRouteThreshold,
             trainRouteThreshold, setTrainRouteThreshold,
-        },
         save,
     } = useContext(Context);
 
     useEffect(() => {
         save();
-    }, [save, show, busRouteThreshold, trainRouteThreshold]);
+    }, [save, showStations, busRouteThreshold, trainRouteThreshold]);
 
     return <TreeNode id='stations' initiallyOpen={true}>
         <label className='font-bold'>
-            <input type='checkbox' checked={show} onChange={e => setShow(e.target.checked)} />
+            <input type='checkbox' checked={showStations} onChange={e => setShowStations(e.target.checked)} />
             &nbsp; Stations
         </label>
         <TreeNode id='station-settings' initiallyOpen={true}>
@@ -129,17 +127,17 @@ export function StationConfig(): ReactNode {
 
 export function StationMarkers(): ReactNode {
     const {
-        boundary: { editing, path },
-        stations: { show, busRouteThreshold, trainRouteThreshold },
+        boundaryEditing, boundaryPath,
+        showStations, busRouteThreshold, trainRouteThreshold,
     } = useContext(Context);
     const [ stations, setStations ] = useState([] as StationGroup[]);
 
     useEffect(() => {
         async function helper() {
-            if (!path || path.length < 2) { return; }
+            if (!boundaryPath || boundaryPath.length < 2) { return; }
 
             const platforms = await getByTransportTypeAsync<Way | Node>(
-                path, 
+                boundaryPath, 
                 'platform',
                 { request: true },
             );
@@ -156,7 +154,7 @@ export function StationMarkers(): ReactNode {
             setStations(stations);
         }
         helper();
-    }, [path, busRouteThreshold]);
+    }, [boundaryPath, busRouteThreshold]);
 
     function modeString(station: StationGroup): ReactNode {
         const modes = [] as string[];
@@ -227,7 +225,7 @@ export function StationMarkers(): ReactNode {
         || otherTypes.length > 0;
     }
 
-    if (path && !editing && show) {
+    if (boundaryPath && !boundaryEditing && showStations) {
         return <LayerGroup>
             {stations.filter(shouldShow).map(s => renderStation(s))}
         </LayerGroup>;
