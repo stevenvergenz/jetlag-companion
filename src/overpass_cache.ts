@@ -69,7 +69,11 @@ async function dbPut(db: IDBDatabase, es: Element[], bounds?: string): Promise<v
                 } satisfies TransportDbItem));
             }
 
-            getCallbacks.get(e.id)?.([e]);
+            const cb = getCallbacks.get(e.id);
+            if (cb) {
+                console.log('calling deferred get for', e.id);
+                cb([e]);
+            }
             getCallbacks.delete(e.id);
         })
     );
@@ -139,6 +143,7 @@ async function getInternalAsync(ids: Id[], { request }: { request: boolean }): P
     if (request) {
         const p = requestAsync(requestIds);
         for (const id of requestIds) {
+            console.log('new request promise for', id);
             getPromises.set(id, p);
         }
         reqEs = await p;
@@ -146,6 +151,7 @@ async function getInternalAsync(ids: Id[], { request }: { request: boolean }): P
     }
     else {
         for (const id of requestIds) {
+            console.log('new deferred get promise for', id);
             getPromises.set(id, getDeferred(id));
         }
         reqEs = (await Promise.all(requestIds.map(id => getPromises.get(id)!))).flat();
@@ -168,6 +174,7 @@ export async function getAsync(ids: Id[], options = { request: false }): Promise
         const p = getInternalAsync(lookupIds, options);
         for (const id of lookupIds) {
             getPromises.set(id, p);
+            console.log('new get promise for', id);
         }
     }
 

@@ -71,10 +71,9 @@ export function ContextProvider({ children }: { children: ReactNode }) {
     const [showStations, setShowStations] = useState(config.stations.show);
     const [busRouteThreshold, setBusRouteThreshold] = useState(config.stations.busRouteThreshold);
     const [trainRouteThreshold, setTrainRouteThreshold] = useState(config.stations.trainRouteThreshold);
-    const [refreshInProgress, setRefreshInProgress] = useState(false);
 
     const [hovering, setHovering] = useState('');
-    
+
     function notBoundaryExcluded(id: Element | Id) {
         return !boundaryExcluded.has(typeof(id) === 'string' ? id : id.id);
     }
@@ -124,11 +123,12 @@ export function ContextProvider({ children }: { children: ReactNode }) {
     };
 
     useEffect(() => {
-        async function helper() {
-            if (refreshInProgress) { return; }
+        function notBoundaryExcluded(id: Element | Id) {
+            return !boundaryExcluded.has(typeof(id) === 'string' ? id : id.id);
+        }
 
+        async function helper() {
             console.log('Fetching boundaries');
-            setRefreshInProgress(true);
 
             const relIds = [...boundaryIncluded].filter(notBoundaryExcluded);
             const relations = await getAsync(relIds, { request: true }) as Relation[];
@@ -145,13 +145,11 @@ export function ContextProvider({ children }: { children: ReactNode }) {
                 .filter(notBoundaryExcluded)
                 .flatMap(w => w.childIds);
             await getAsync(nodeIds, { request: true });
-
-            setRefreshInProgress(false);
         }
 
         helper();
 
-    }, [notBoundaryExcluded, boundaryIncluded, boundaryExcluded]);
+    }, [boundaryIncluded, boundaryExcluded]);
 
     return <Context.Provider value={context}>
         {children}

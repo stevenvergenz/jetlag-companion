@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import 'fake-indexeddb/auto';
 import { getAsync, memCacheId } from '../overpass_cache';
 
 function sleep(ms: number): Promise<void> {

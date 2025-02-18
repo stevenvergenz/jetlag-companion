@@ -73,6 +73,7 @@ export function RelationPath({ id }: RelationPathProps): ReactNode {
     const { notBoundaryExcluded } = useContext(Context);
     const [relation, setRelation] = useState(undefined as Relation | undefined);
 
+    console.log('relation path', id);
     useEffect(() => {
         if (!relation || relation.id !== id) {
             getAsync([id]).then(([r]) => setRelation(r as Relation));
@@ -90,6 +91,7 @@ type WayGroupPathProps = {
 export function WayGroupPath({ wayGroup }: WayGroupPathProps): ReactNode {
     const { notBoundaryExcluded } = useContext(Context);
 
+    console.log('way group path', wayGroup.id);
     return wayGroup.children
         .filter(e => e instanceof Way && notBoundaryExcluded(e))
         .map(w => <WayPath key={w.id} id={w.id} />);
@@ -105,6 +107,8 @@ export function WayPath({ id }: WayPathProps): ReactNode {
     } = useContext(Context);
     const [way, setWay] = useState(undefined as Way | undefined);
     const [renderOptions, setRenderOptions] = useState(DisabledStyle as PathOptions);
+
+    console.log('way path', id);
 
     useEffect(() => {
         if (!way || way.id !== id) {
