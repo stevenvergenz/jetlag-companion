@@ -1,9 +1,7 @@
 import { Element, Node, Relation, Way } from './element';
-import { Id, packFrom, unpack, unreversed } from './id';
+import { Id, packFrom, unpack } from './id';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';
-
-const reqPromises = new Map<Id, Promise<Element[]>>();
 
 type OsmQueryResult = {
     version: string,
@@ -31,7 +29,8 @@ type OsmMember = {
 
 export type OsmWayGroup = OsmCommon & {
     type: 'wayGroup',
-    index: number,
+    role: string,
+    ways: number[],
 }
 
 export type OsmWay = OsmCommon & {
@@ -72,7 +71,7 @@ async function query(query: string): Promise<Element[]> {
     });
 }
 
-function requestAsyncInternal(ids: Id[]): Promise<Element[]> {
+export function requestAsync(ids: Id[]): Promise<Element[]> {
     const queryIdParts = ids.map(id => unpack(id));
 
     if (queryIdParts.length > 0) {
@@ -96,36 +95,6 @@ function requestAsyncInternal(ids: Id[]): Promise<Element[]> {
     else {
         return Promise.resolve([]);
     }
-}
-
-export async function requestAsync(ids: Id[]): Promise<Element[]> {
-    ids = ids.map(id => unreversed(id)).filter(id => unpack(id).type !== 'wayGroup');
-    const queryIds = ids.filter(id => !reqPromises.has(id));
-    if (queryIds.length > 0) {
-        const p = requestAsyncInternal(queryIds);
-        for (const id of queryIds) {
-            reqPromises.set(id, p);
-        }
-    }
-
-    const items = (await Promise.all(ids.map(id => reqPromises.get(id)!)))
-        .flat()
-        .reduce((set, e) => {
-            set.set(e.id, e);
-            return set;
-        }, new Map<Id, Element>());
-
-    const ret = [] as Element[];
-    for (const id of ids) {
-        const e = items.get(unreversed(id));
-        if (!e) {
-            console.log('Missing element:', id);
-            continue;
-        }
-        ret.push(e);
-    }
-
-    return ret;
 }
 
 export function requestTransport(poly: string): Promise<Element[]> {
