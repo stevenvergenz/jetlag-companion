@@ -1,4 +1,4 @@
-import { Element, Node, Relation, Way } from './element';
+import { Node, Relation, Way } from './element';
 import { Id, packFrom, unpack } from './id';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';
@@ -48,7 +48,7 @@ export type OsmElement = OsmRelation | OsmWayGroup | OsmWay | OsmNode;
 
 const QueryLimit = 512 * 1024 * 1024; // 512MB
 
-async function query(query: string): Promise<Element[]> {
+async function query(query: string): Promise<(Relation | Way | Node)[]> {
     const res = await fetch(endpoint, {
         method: 'POST',
         body: `[maxsize:${QueryLimit}][out:json]; ${query} out;`,
@@ -71,7 +71,7 @@ async function query(query: string): Promise<Element[]> {
     });
 }
 
-export function requestAsync(ids: Id[]): Promise<Element[]> {
+export function requestAsync(ids: Id[]): Promise<(Relation | Way | Node)[]> {
     const queryIdParts = ids.map(id => unpack(id));
 
     if (queryIdParts.length > 0) {
@@ -97,7 +97,7 @@ export function requestAsync(ids: Id[]): Promise<Element[]> {
     }
 }
 
-export function requestTransport(poly: string): Promise<Element[]> {
+export function requestTransport(poly: string): Promise<(Relation | Way | Node)[]> {
     // relation[public_transport=stop_area] describes a group of stops
     //   can have members "platform", "stop_position", "station", etc.
     // nw[public_transport=station] is many:many with stop_areas

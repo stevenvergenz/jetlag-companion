@@ -16,7 +16,7 @@ type GetOptions = {
     request: boolean,
 };
 
-type CachedElement = Element | undefined;
+type CachedElement = Relation | Way | Node | undefined;
 
 /** The elements that have already been loaded */
 export const memCacheId = new Map<Id, CachedElement>();
@@ -95,10 +95,10 @@ async function dbPut(db: IDBDatabase, es: CachedElement[], bounds?: string): Pro
     );
 }
 
-function dbGetById(db: IDBDatabase, ids: Id[]): Promise<CachedElement[]> {
+function dbGetById(db: IDBDatabase, ids: Id[]): Promise<Map<Id, CachedElement>> {
     const tx = db.transaction('elements', 'readonly');
     const store = tx.objectStore('elements');
-    const promises = [] as Promise<Element | undefined>[];
+    const promises = [] as Promise<CachedElement>[];
 
     for (const id of ids) {
         const uid = unpack(id);
@@ -126,7 +126,7 @@ function dbGetById(db: IDBDatabase, ids: Id[]): Promise<CachedElement[]> {
     return Promise.all(promises);
 }
 
-async function dbGetTransportByBounds(db: IDBDatabase, bounds: string): Promise<(Element | undefined)[]> {
+async function dbGetTransportByBounds(db: IDBDatabase, bounds: string): Promise<CachedElement[]> {
     const tx = db.transaction(['transport', 'elements'], 'readonly');
     const tStore = tx.objectStore('transport');
 
@@ -143,21 +143,23 @@ async function dbGetTransportByBounds(db: IDBDatabase, bounds: string): Promise<
 }
 
 /** Generate a promise that will eventually be resolved once the element is fetched and cached */
-function getDeferred(id: Id): Promise<Element | undefined> {
-    const p = new Promise<Element>((resolve) => {
+function getDeferred(id: Id): Promise<CachedElement> {
+    const p = new Promise<CachedElement>((resolve) => {
         deferredCallbacks.set(id, resolve);
     });
     deferredPromises.set(id, p);
     return p;
 }
 
-async function requestAndCache(ids: Id[]): Promise<(Element | undefined)[]> {
-    const results = new Map<Id, Element>();
+async function requestAndCache(ids: Id[]): Promise<Map<Id, CachedElement>> {
+    const results = new Map<Id, CachedElement>();
 
     const db = await dbInit();
     const dbEs = await dbGetById(db, ids);
-    for (const e of dbEs) {
-        results.set(e.id, e);
+    for (const e of dbEs.values()) {
+        if (e) {
+            results.set(e.id, e);
+        }
     }
 
     const requestIds = ids.filter(id => !results.has(id));
@@ -170,7 +172,7 @@ async function requestAndCache(ids: Id[]): Promise<(Element | undefined)[]> {
 
     db.close();
 
-    return ids.map(id => results.get(id));
+    return results;
 }
 
 export async function getAsync(
@@ -178,29 +180,45 @@ export async function getAsync(
     { request }: GetOptions = { request: false },
 ): Promise<(Element | undefined)[]> {
     // unreverse and filter out waygroups
-    ids = ids.map(unreversed);
+    const remainingIds = new Set<Id>(ids.map(unreversed));
+    const promises = new Map<Id, Promise<(Element | undefined)>>;
 
-    const promises = [] as Promise<(Element | undefined)>[];
-    for (const id of ids) {
-        const uid = unpack(id);
-        if (memCacheId.has(id)) {
-            promises.push(Promise.resolve(memCacheId.get(id) as Element));
-        }
-        else if (uid.type === 'wayGroup') {
-            const parentId = pack({ type: 'relation', id: uid.id });
-            promises.push(
-                getAsync([parentId], { request }).then(es => {
-                    const r = es.find(e => e.id === parentId) as Relation;
-                    return r.wayGroups?.get(id);
-                })
-            );
-        }
-        else if (reqPromises.has(id)) {
-            promises.push(reqPromises.get(id)!.then(es => es.find(e => e.id === id)));
-        }
-        else if (request) {
+    const memCached = [...remainingIds.values()].filter(id => memCacheId.has(id));
+    for (const id of memCached) {
+        promises.set(id, Promise.resolve(memCacheId.get(id)));
+        remainingIds.delete(id);
+    }
 
+    const wgs = [...remainingIds.values()].filter(id => unpack(id).type === 'wayGroup');
+    for (const id of wgs) {
+        const parentId = pack({ type: 'relation', id: unpack(id).id });
+        const r = memCacheId.get(parentId) as Relation | undefined;
+        if (r) {
+            promises.set(id, Promise.resolve(r.wayGroups?.get(id)));
+            remainingIds.delete(id);
         }
+    }
+
+    const pendingReqs = [...remainingIds.values()].filter(id => reqPromises.has(id));
+    for (const id of pendingReqs) {
+        promises.set(id,
+            reqPromises.get(id)!.then(es => es.find(e => e?.id === id)));
+        remainingIds.delete(id);
+    }
+
+    if (request) {
+        const toRequest = [...remainingIds.values()];
+        const p = requestAndCache(toRequest);
+        for (const id of toRequest) {
+            promises.set(id, p.then(es => es.get(id)));
+            remainingIds.delete(id);
+        }
+    }
+
+    const pendingCached = [...remainingIds.values()].filter(id => cachePromises.has(id));
+    for (const id of pendingCached) {
+        promises.set(id, cachePromises.get(id)!.then(es => es.get(id)));
+        remainingIds.delete(id);
     }
 
     return Promise.all(promises);
