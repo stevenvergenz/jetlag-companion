@@ -25,7 +25,6 @@ let memCacheTransportBounds: string | undefined;
 
 /** In-flight or resolved request promises for an element */
 const reqPromises = new Map<Id, Promise<QueryElement | undefined>>();
-
 const cachePromises = new Map<Id, Promise<QueryElement | undefined>>();
 
 /** Deferred get requests */
@@ -49,6 +48,19 @@ async function dbInit(): Promise<IDBDatabase> {
     });
 
     return await dbReq(req);
+}
+
+export async function dbClear(): Promise<void> {
+    memCacheId.clear();
+    memCacheTransport = undefined;
+    memCacheTransportBounds = undefined;
+
+    const db = await dbInit();
+    const tx = db.transaction(['transport', 'elements'], 'readwrite');
+    const eStore = tx.objectStore('elements');
+    const tStore = tx.objectStore('transport');
+    await Promise.all([dbReq(eStore.clear()), dbReq(tStore.clear())]);
+    db.close();
 }
 
 async function dbPut(tx: IDBTransaction, e: QueryElement, bounds?: string): Promise<void> {

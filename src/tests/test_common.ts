@@ -3,7 +3,6 @@ import { Relation, Way, Node, HierarchyHelper } from '../element';
 import { memCacheId } from '../overpass_cache';
 import { pack } from '../id';
 
-
 /**
  * ```text
  *                                    |          |       

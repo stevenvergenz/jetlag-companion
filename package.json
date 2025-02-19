@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest --workspace=vitest.workspace.ts"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -21,6 +21,7 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/browser": "^3.0.6",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.0.0",
@@ -28,11 +29,13 @@
     "fake-indexeddb": "^6.0.0",
     "flatbush": "^4.4.0",
     "globals": "^15.14.0",
+    "playwright": "^1.50.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.18.2",
     "vite": "^6.0.5",
-    "vitest": "^3.0.3"
+    "vitest": "^3.0.3",
+    "vitest-browser-react": "^0.1.1"
   }
 }
