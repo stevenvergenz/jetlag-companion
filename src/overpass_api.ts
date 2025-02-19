@@ -30,7 +30,7 @@ type OsmMember = {
 export type OsmWayGroup = OsmCommon & {
     type: 'wayGroup',
     role: string,
-    ways: number[],
+    ways: Id[],
 }
 
 export type OsmWay = OsmCommon & {
@@ -46,58 +46,71 @@ export type OsmNode = OsmCommon & {
 
 export type OsmElement = OsmRelation | OsmWayGroup | OsmWay | OsmNode;
 
+export type QueryElement = Relation | Way | Node;
+export type QueryResult = Map<Id, QueryElement | undefined>;
+
 const QueryLimit = 512 * 1024 * 1024; // 512MB
 
-async function query(query: string): Promise<(Relation | Way | Node)[]> {
+async function query(query: string): Promise<QueryResult> {
     const res = await fetch(endpoint, {
         method: 'POST',
         body: `[maxsize:${QueryLimit}][out:json]; ${query} out;`,
     });
     const body = await res.json() as OsmQueryResult;
-    return body.elements.map(e => {
+
+    const result = new Map<Id, Relation | Way | Node | undefined>();
+    for (const e of body.elements) {
         const id = packFrom(e);
         if (e.type === 'relation') {
-            return new Relation(id, e);
+            result.set(id, new Relation(id, e));
         }
         else if (e.type === 'way') {
-            return new Way(id, e);
+            result.set(id, new Way(id, e));
         }
         else if (e.type === 'node') {
-            return new Node(id, e);
+            result.set(id, new Node(id, e));
         }
         else {
             throw new Error(`Unknown element type: ${e.type}`);
         }
-    });
+    }
+
+    return result;
 }
 
-export function requestAsync(ids: Id[]): Promise<(Relation | Way | Node)[]> {
+export async function requestAsync(ids: Id[]): Promise<QueryResult> {
+    if (ids.length === 0) {
+        return new Map();
+    }
+
     const queryIdParts = ids.map(id => unpack(id));
+    const relationIds = queryIdParts.filter(p => p.type === 'relation').map(p => p.id);
+    const wayIds = queryIdParts.filter(p => p.type === 'way').map(p => p.id);
+    const nodeIds = queryIdParts.filter(p => p.type === 'node').map(p => p.id);
 
-    if (queryIdParts.length > 0) {
-        const relationIds = queryIdParts.filter(p => p.type === 'relation').map(p => p.id);
-        const wayIds = queryIdParts.filter(p => p.type === 'way').map(p => p.id);
-        const nodeIds = queryIdParts.filter(p => p.type === 'node').map(p => p.id);
+    let q = '';
+    if (relationIds.length > 0) {
+        q += `relation(id:${relationIds.join(',')});`;
+    }
+    if (wayIds.length > 0) {
+        q += `way(id:${wayIds.join(',')});`;
+    }
+    if (nodeIds.length > 0) {
+        q += `node(id:${nodeIds.join(',')});`;
+    }
+    q = `(${q});`;
 
-        let q = '';
-        if (relationIds.length > 0) {
-            q += `relation(id:${relationIds.join(',')});`;
+    const result = await query(q);
+    for (const id of ids) {
+        if (!result.has(id)) {
+            result.set(id, undefined);
         }
-        if (wayIds.length > 0) {
-            q += `way(id:${wayIds.join(',')});`;
-        }
-        if (nodeIds.length > 0) {
-            q += `node(id:${nodeIds.join(',')});`;
-        }
-        q = `(${q});`;
-        return query(q);
     }
-    else {
-        return Promise.resolve([]);
-    }
+
+    return result;
 }
 
-export function requestTransport(poly: string): Promise<(Relation | Way | Node)[]> {
+export function requestTransport(poly: string): Promise<QueryResult> {
     // relation[public_transport=stop_area] describes a group of stops
     //   can have members "platform", "stop_position", "station", etc.
     // nw[public_transport=station] is many:many with stop_areas

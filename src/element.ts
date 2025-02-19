@@ -169,11 +169,6 @@ export abstract class Element {
                 HierarchyHelper.setInterest(id, this);
             }
         }
-        else if (data.type === 'wayGroup') {
-            for (const id of data.ways.map(w => pack({ type: 'way', id: w }))) {
-                HierarchyHelper.setInterest(id, this);
-            }
-        }
         else if (data.type === 'way') {
             for (const id of data.nodes.map(n => pack({ type: 'node', id: n }))) {
                 HierarchyHelper.setInterest(id, this);
@@ -221,29 +216,16 @@ export class WayGroup extends Element {
         WayGroup.nextOffsets[relationId] = offset + 1;
         const rid = unpack(relationId);
         const wgId = pack({ type: 'wayGroup', id: rid.id, offset });
-        super(wgId, {
+        return new WayGroup(wgId, {
             type: 'wayGroup',
             id: rid.id,
-            index: offset,
-            ways: [],
+            role,
+            ways: ways.map(w => w.id),
         });
-
-        this.parentIds.add(relationId);
-        this.role = role;
-        this.startsWithNode = '';
-        this.endsWithNode = '';
-
-        for (const w of ways) {
-            if (!this.add(w)) {
-                throw new Error('Ways do not connect');
-            }
-        }
-
-        this.data.ways = this.childIds.map(id => unpack(id).id);
     }
 
-    public startsWithNode: Id;
-    public endsWithNode: Id;
+    public startsWithNode: Id = '';
+    public endsWithNode: Id = '';
 
     public get name(): string {
         return `${this.children[0].name}, ${this.role}`;
@@ -257,14 +239,28 @@ export class WayGroup extends Element {
         return this.data.role;
     }
 
-    public constructor(id: Id, data: OsmElement) {
+    public constructor(id: Id, data: OsmWayGroup) {
         super(id, data);
+
+        if (data.ways.length === 0) {
+            throw new Error('Requires at least one way');
+        }
+
+        const wayIds = data.ways;
+        for (const id of wayIds) {
+            const w = get(id) as Way;
+            if (!w || !this.add(w)) {
+                throw new Error('Ways do not connect');
+            }
+        }
 
         const uid = unpack(id);
         const parentId = pack({ type: 'relation', id: uid.id });
-        HierarchyHelper.fulfillInterest(this, )
-
-        const firstWay = 
+        this.parentIds.add(parentId);
+        const parent = get(parentId);
+        if (parent) {
+            parent.addChildUnique(id);
+        }
     }
 
     public add(way: Way): boolean {
@@ -300,6 +296,7 @@ export class WayGroup extends Element {
             return false;
         }
         
+        this.data.ways = this.childIds;
         return true;
     }
 }

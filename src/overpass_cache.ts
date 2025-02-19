@@ -1,7 +1,7 @@
 import { LatLngTuple } from 'leaflet';
 import { Id, pack, unpack, unreversed } from './id';
-import { Element, Node, Relation, Way, WayGroup } from './element';
-import { OsmElement, OsmElementType, requestAsync, requestTransport } from './overpass_api';
+import { Element, Node, Relation, Way } from './element';
+import { QueryElement, QueryResult, OsmElement, OsmElementType, requestAsync, requestTransport } from './overpass_api';
 
 type TransportType = 'platform' | 'station' | 'stop_area' | 'route' | 'route_master';
 
@@ -16,23 +16,21 @@ type GetOptions = {
     request: boolean,
 };
 
-type CachedElement = Relation | Way | Node | undefined;
-
 /** The elements that have already been loaded */
-export const memCacheId = new Map<Id, CachedElement>();
+export const memCacheId = new Map<Id, QueryElement>();
 /** The set of element IDs associated with the current boundary */
 let memCacheTransport: Set<Id> | undefined;
 /** The hash of the current boundary, if any */
 let memCacheTransportBounds: string | undefined;
 
 /** In-flight or resolved request promises for an element */
-const reqPromises = new Map<Id, Promise<CachedElement[]>>();
+const reqPromises = new Map<Id, Promise<QueryElement | undefined>>();
 
-const cachePromises = new Map<Id, Promise<CachedElement[]>>();
+const cachePromises = new Map<Id, Promise<QueryElement | undefined>>();
 
 /** Deferred get requests */
-const deferredCallbacks = new Map<Id, (e: CachedElement) => void>();
-const deferredPromises = new Map<Id, Promise<CachedElement>>();
+const deferredCallbacks = new Map<Id, (e: QueryElement) => void>();
+const deferredPromises = new Map<Id, Promise<QueryElement>>();
 
 function dbReq<T>(req: IDBRequest<T>): Promise<T> {
     return new Promise((resolve, reject) => {
@@ -53,80 +51,86 @@ async function dbInit(): Promise<IDBDatabase> {
     return await dbReq(req);
 }
 
-async function dbPut(db: IDBDatabase, es: CachedElement[], bounds?: string): Promise<void> {
-    const tx = db.transaction(['elements', 'transport'], 'readwrite');
+async function dbPut(tx: IDBTransaction, e: QueryElement, bounds?: string): Promise<void> {
     const eStore = tx.objectStore('elements');
     const tStore = tx.objectStore('transport');
 
-    await Promise.all(es
-        .map(async (e) => {
-            if (!e) return;
+    memCacheId.set(e.id, e);
+    await dbReq(eStore.put(e.data));
 
-            memCacheId.set(e.id, e);
-            await dbReq(eStore.put(e.data));
+    if (bounds && e.data.tags && (
+        e.data.tags.public_transport 
+        || ['route', 'route_master'].includes(e.data.tags.type)
+    )) {
+        if (memCacheTransportBounds !== bounds) {
+            memCacheTransportBounds = bounds;
+            memCacheTransport = new Set<Id>();
+        }
 
-            if (bounds && e.data.tags && (
-                e.data.tags.public_transport 
-                || ['route', 'route_master'].includes(e.data.tags.type)
-            )) {
-                if (memCacheTransportBounds !== bounds) {
-                    memCacheTransportBounds = bounds;
-                    memCacheTransport = new Set<Id>();
-                }
-
-                const tType = (e.data.tags.public_transport ?? e.data.tags.type) as TransportType;
-                memCacheTransport?.add(e.id);
-                    
-                await dbReq(tStore.put({
-                    bounds, 
-                    transportType: tType, 
-                    type: e.data.type,
-                    id: e.data.id,
-                } satisfies TransportDbItem));
-            }
-
-            const cb = deferredCallbacks.get(e.id);
-            if (cb) {
-                console.log('calling deferred get for', e.id);
-                cb(e);
-                deferredCallbacks.delete(e.id);
-            }
-        })
-    );
-}
-
-function dbGetById(db: IDBDatabase, ids: Id[]): Promise<Map<Id, CachedElement>> {
-    const tx = db.transaction('elements', 'readonly');
-    const store = tx.objectStore('elements');
-    const promises = [] as Promise<CachedElement>[];
-
-    for (const id of ids) {
-        const uid = unpack(id);
-        const p = (dbReq(store.get([uid.type, uid.id])) as Promise<OsmElement | undefined>)
-            .then(e => {
-                if (e?.type === 'node') {
-                    const n = new Node(pack(e), e);
-                    memCacheId.set(n.id, n);
-                    return n;
-                }
-                else if (e?.type === 'way') {
-                    const w = new Way(pack(e), e);
-                    memCacheId.set(w.id, w);
-                    return w;
-                }
-                else if (e?.type === 'relation') {
-                    const r = new Relation(pack(e), e);
-                    memCacheId.set(r.id, r);
-                    return r;
-                }
-            });
-        promises.push(p);
+        const tType = (e.data.tags.public_transport ?? e.data.tags.type) as TransportType;
+        memCacheTransport?.add(e.id);
+            
+        await dbReq(tStore.put({
+            bounds, 
+            transportType: tType, 
+            type: e.data.type,
+            id: e.data.id,
+        } satisfies TransportDbItem));
     }
 
-    return Promise.all(promises);
+    const cb = deferredCallbacks.get(e.id);
+    if (cb) {
+        console.log('calling deferred get for', e.id);
+        cb(e);
+        deferredCallbacks.delete(e.id);
+        deferredPromises.delete(e.id);
+    }
 }
 
-async function dbGetTransportByBounds(db: IDBDatabase, bounds: string): Promise<CachedElement[]> {
+async function dbPutAll(db: IDBDatabase, es: QueryResult, bounds?: string): Promise<void> {
+    const tx = db.transaction(['elements', 'transport'], 'readwrite');
+    await Promise.all([...es.values()]
+        .filter(e => e !== undefined)
+        .map(e => dbPut(tx, e, bounds)));
+}
+
+async function dbGetById(db: IDBDatabase, ids: Id[]): Promise<QueryResult> {
+    const tx = db.transaction('elements', 'readonly');
+    const store = tx.objectStore('elements');
+
+    const data = await Promise.all(
+        ids.map(id => {
+            const uid = unpack(id);
+            return dbReq<OsmElement | undefined>(store.get([uid.type, uid.id]));
+        }));
+
+    const results: QueryResult = new Map();
+    for (const eData of data) {
+        if (!eData) { continue; }
+        if (eData.type === 'node') {
+            const n = new Node(pack(eData), eData);
+            results.set(n.id, n);
+        }
+        else if (eData.type === 'way') {
+            const w = new Way(pack(eData), eData);
+            results.set(w.id, w);
+        }
+        else if (eData.type === 'relation') {
+            const r = new Relation(pack(eData), eData);
+            results.set(r.id, r);
+        }
+    }
+
+    for (const id of ids) {
+        if (!results.has(id)) {
+            results.set(id, undefined);
+        }
+    }
+
+    return results;
+}
+
+async function dbGetTransportByBounds(db: IDBDatabase, bounds: string): Promise<QueryResult> {
     const tx = db.transaction(['transport', 'elements'], 'readonly');
     const tStore = tx.objectStore('transport');
 
@@ -143,16 +147,20 @@ async function dbGetTransportByBounds(db: IDBDatabase, bounds: string): Promise<
 }
 
 /** Generate a promise that will eventually be resolved once the element is fetched and cached */
-function getDeferred(id: Id): Promise<CachedElement> {
-    const p = new Promise<CachedElement>((resolve) => {
+function getDeferred(id: Id): Promise<QueryElement> {
+    if (deferredPromises.has(id)) {
+        return deferredPromises.get(id)!;
+    }
+
+    const p = new Promise<QueryElement>((resolve) => {
         deferredCallbacks.set(id, resolve);
     });
     deferredPromises.set(id, p);
     return p;
 }
 
-async function requestAndCache(ids: Id[]): Promise<Map<Id, CachedElement>> {
-    const results = new Map<Id, CachedElement>();
+async function requestAndCache(ids: Id[]): Promise<QueryResult> {
+    const results: QueryResult = new Map();
 
     const db = await dbInit();
     const dbEs = await dbGetById(db, ids);
@@ -164,14 +172,21 @@ async function requestAndCache(ids: Id[]): Promise<Map<Id, CachedElement>> {
 
     const requestIds = ids.filter(id => !results.has(id));
     const reqEs = await requestAsync(requestIds);
-    await dbPut(db, reqEs); 
+    await dbPutAll(db, reqEs); 
 
-    for (const e of reqEs) {
-        results.set(e.id, e);
+    for (const e of reqEs.values()) {
+        if (e) {
+            results.set(e.id, e);
+        }
+    }
+
+    for (const id of ids) {
+        if (!results.has(id)) {
+            results.set(id, undefined);
+        }
     }
 
     db.close();
-
     return results;
 }
 
@@ -179,49 +194,84 @@ export async function getAsync(
     ids: Id[],
     { request }: GetOptions = { request: false },
 ): Promise<(Element | undefined)[]> {
-    // unreverse and filter out waygroups
-    const remainingIds = new Set<Id>(ids.map(unreversed));
-    const promises = new Map<Id, Promise<(Element | undefined)>>;
+    ids = ids.map(unreversed);
 
+    // unreverse and filter out waygroups
+    const remainingIds = new Set<Id>(ids);
+    const results = new Map<Id, Element | undefined>();
+
+    // objects already loaded, return from memory cache
     const memCached = [...remainingIds.values()].filter(id => memCacheId.has(id));
     for (const id of memCached) {
-        promises.set(id, Promise.resolve(memCacheId.get(id)));
+        results.set(id, memCacheId.get(id)!);
         remainingIds.delete(id);
     }
 
+    // waygroups are not stored in memory cache, but their parent relations are
     const wgs = [...remainingIds.values()].filter(id => unpack(id).type === 'wayGroup');
     for (const id of wgs) {
         const parentId = pack({ type: 'relation', id: unpack(id).id });
         const r = memCacheId.get(parentId) as Relation | undefined;
-        if (r) {
-            promises.set(id, Promise.resolve(r.wayGroups?.get(id)));
-            remainingIds.delete(id);
-        }
-    }
-
-    const pendingReqs = [...remainingIds.values()].filter(id => reqPromises.has(id));
-    for (const id of pendingReqs) {
-        promises.set(id,
-            reqPromises.get(id)!.then(es => es.find(e => e?.id === id)));
+        results.set(id, r?.wayGroups?.get(id));
         remainingIds.delete(id);
     }
 
     if (request) {
-        const toRequest = [...remainingIds.values()];
+        // request everything not in flight
+        const toRequest = [...remainingIds.values()].filter(id => !reqPromises.has(id));
         const p = requestAndCache(toRequest);
         for (const id of toRequest) {
-            promises.set(id, p.then(es => es.get(id)));
-            remainingIds.delete(id);
+            reqPromises.set(id,
+                p.then(es => {
+                    reqPromises.delete(id);
+                    return es.get(id);
+                }));
+        }
+
+        // wait for the pending requests and return them
+        const pendingReqs = [...remainingIds.values()].map(id => reqPromises.get(id)!);
+        const pendingEs = await Promise.all(pendingReqs);
+        for (const pendingE of pendingEs) {
+            if (pendingE && remainingIds.has(pendingE.id)) {
+                results.set(pendingE.id, pendingE);
+                remainingIds.delete(pendingE.id);
+            }
+        }
+    }
+    else {
+        // fetch everything not in flight
+        const toFetch = [...remainingIds.values()].filter(id => !cachePromises.has(id));
+
+        const db = await dbInit();
+        const p = dbGetById(db, toFetch);
+        for (const id of toFetch) {
+            cachePromises.set(id,
+                p.then(es => {
+                    cachePromises.delete(id);
+                    return es.get(id);
+                }));
+        }
+
+        const pendingFetches = [...remainingIds.values()].map(id => cachePromises.get(id)!);
+        const pendingEs = await Promise.all(pendingFetches);
+        for (const pendingE of pendingEs) {
+            if (pendingE && remainingIds.has(pendingE.id)) {
+                results.set(pendingE.id, pendingE);
+                remainingIds.delete(pendingE.id);
+            }
         }
     }
 
-    const pendingCached = [...remainingIds.values()].filter(id => cachePromises.has(id));
-    for (const id of pendingCached) {
-        promises.set(id, cachePromises.get(id)!.then(es => es.get(id)));
-        remainingIds.delete(id);
+    const deferred = [...remainingIds.values()].map(id => getDeferred(id));
+    const deferredEs = await Promise.all(deferred);
+    for (const e of deferredEs) {
+        if (remainingIds.has(e.id)) {
+            results.set(e.id, e);
+            remainingIds.delete(e.id);
+        }
     }
 
-    return Promise.all(promises);
+    return ids.map(id => results.get(id));
 }
 
 export function get(id: Id): Element | undefined {
@@ -235,7 +285,7 @@ export function get(id: Id): Element | undefined {
     }
 }
 
-export async function getByTransportTypeAsync<T extends Element>(
+export async function getByTransportTypeAsync<T extends QueryElement>(
     bounds: LatLngTuple[], 
     transportType: TransportType, 
     { request } = { request: false },
@@ -249,12 +299,12 @@ export async function getByTransportTypeAsync<T extends Element>(
     const db = await dbInit();
 
     let es = await dbGetTransportByBounds(db, cleanBoundsHash);
-    if (request && es.length === 0) {
+    if (request && es.size === 0) {
         es = await requestTransport(cleanBounds);
-        await dbPut(db, es, cleanBoundsHash);
+        await dbPutAll(db, es, cleanBoundsHash);
     }
 
     db.close();
-    return es.filter(e => 
-        e.data.tags?.public_transport === transportType || e.data.tags?.type === transportType) as T[];
+    return [...es.values()]
+        .filter(e => e?.data.tags?.public_transport === transportType || e?.data.tags?.type === transportType) as T[];
 }
