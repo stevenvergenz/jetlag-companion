@@ -42,7 +42,7 @@ export class HierarchyHelper {
     public static fulfillInterestRelationWay(child: Way, parent: Relation) {
         /** All roles for the fulfilled way */
         const roles = new Set(parent.data.members
-            .filter(m => pack({ type: m.type, id: m.ref }) === child.id)
+            .filter(m => packFrom(m) === child.id)
             .map(m => m.role));
         if (roles.size === 0) {
             return;
@@ -57,10 +57,7 @@ export class HierarchyHelper {
 
             // no existing way group will take it, add a new one
             if (added.length === 0) {
-                const wg = WayGroup.fromWays(parent.id, role, child);
-                parent.wayGroups!.set(wg.id, wg);
-                parent.addChildUnique(wg.id);
-                child.parentIds.add(wg.id);
+                WayGroup.fromWays(parent.id, role, child);
                 continue;
             }
 
@@ -149,7 +146,7 @@ export abstract class Element {
         return this._data?.tags?.['name'] 
             ?? this._data?.tags?.['description'] 
             ?? this._data?.tags?.['ref'] 
-            ?? '<unspecified>';
+            ?? '<unnamed>';
     }
 
     public get complete(): boolean {
@@ -257,9 +254,11 @@ export class WayGroup extends Element {
         const uid = unpack(id);
         const parentId = pack({ type: 'relation', id: uid.id });
         this.parentIds.add(parentId);
-        const parent = get(parentId);
+        const parent = get(parentId) as Relation | undefined;
         if (parent) {
             parent.addChildUnique(id);
+            parent.wayGroups ??= new Map();
+            parent.wayGroups.set(id, this);
         }
     }
 

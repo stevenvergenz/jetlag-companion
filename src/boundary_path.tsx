@@ -76,7 +76,12 @@ export function RelationPath({ id }: RelationPathProps): ReactNode {
     console.log('relation path', id);
     useEffect(() => {
         if (!relation || relation.id !== id) {
-            getAsync([id]).then(([r]) => setRelation(r as Relation));
+            getAsync([id]).then(([e]) => {
+                const r = e as Relation;
+                r.calcWayGroups();
+                setRelation(r);
+            })
+            .catch(e => console.error(e));
         }
     }, [id, relation]);
 

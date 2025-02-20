@@ -70,22 +70,19 @@ export async function generateBoundaryLoopPath(
         [...included]
         .filter(id => !excluded.has(id))
     ) as Relation[];
-    console.log('boundary relations loaded');
+
     const ws = await getAsync(
         rs.flatMap(r => r.data.members)
         .filter(m => m.type === 'way')
         .map(m => packFrom(m))
         .filter(id => !excluded.has(id))
     );
-    console.log('boundary ways loaded');
 
-    await getAsync(ws.flatMap(w => w.childIds));
-    console.log('boundary nodes loaded');
+    await getAsync(ws.flatMap(w => w ? w.childIds : []));
 
     for (const r of rs) {
         r.calcWayGroups();
     }
-    console.log('way groups calculated');
 
     return mergeRelations(rs, excluded, distanceFn);
 }

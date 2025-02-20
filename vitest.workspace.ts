@@ -7,12 +7,12 @@ export default defineWorkspace([
     extends: 'vite.config.ts',
     test: {
       browser: {
-        headless: true,
+        //headless: true,
         enabled: true,
         provider: 'playwright',
         // https://vitest.dev/guide/browser/playwright
         instances: [
-          { browser: 'chromium' },
+          //{ browser: 'chromium' },
           { browser: 'firefox' },
         ]
       },
