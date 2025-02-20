@@ -16,7 +16,7 @@ export type Config = {
     stations: StationConfig,
 };
 
-const DefaultConfig: Config = {
+export const DefaultConfig: Config = {
     boundary: {
         included: new Set(),
         excluded: new Set(),

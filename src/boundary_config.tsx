@@ -8,9 +8,9 @@ import { Context } from './context';
 
 export function BoundaryConfig(): ReactNode {
     const {
-            boundaryEditing, setBoundaryEditing,
-            boundaryIncluded, setBoundaryIncluded,
-        save,
+        boundaryEditing, setBoundaryEditing,
+        boundaryIncluded, setBoundaryIncluded,
+        save
     } = useContext(Context);
     const [newId, setNewId] = useState('');
 
@@ -28,6 +28,7 @@ export function BoundaryConfig(): ReactNode {
         if (!boundaryIncluded.has(id)) {
             setBoundaryIncluded(new Set([...boundaryIncluded, id]));
             setNewId('');
+            save();
         }
     }
 
@@ -36,12 +37,9 @@ export function BoundaryConfig(): ReactNode {
         <TreeNode id='boundary-settings' initiallyOpen={true}>
             <span className='font-bold'>Settings</span>
             <div>
-                <input type='number' min='0' placeholder='OSM Relation ID'
+                <input type='number' name='addBoundaryRelation' min='0' placeholder='OSM Relation ID'
                     value={newId} onChange={e => setNewId(e.target.value)}/>
                 <button type='button' onClick={addRelation}>Add</button>
-            </div>
-            <div>
-                <button type='button' onClick={save}>Save</button>
             </div>
         </TreeNode>
         { [...boundaryIncluded].map(id => <RelationConfig key={`c${id}`} id={id} />) }
