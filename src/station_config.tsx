@@ -4,7 +4,7 @@ import { PathOptions } from 'leaflet';
 
 import { Id } from './id';
 import { TreeNode } from './tree_node';
-import { Context } from './context';
+import { SharedContext } from './context';
 import { getByTransportTypeAsync } from './overpass_cache';
 import { Element, Relation, Way, Node } from './element';
 
@@ -94,15 +94,35 @@ class StationGroup {
 
 export function StationConfig(): ReactNode {
     const {
-            showStations, setShowStations,
-            busRouteThreshold, setBusRouteThreshold,
-            trainRouteThreshold, setTrainRouteThreshold,
+        showStations,
+        busRouteThreshold,
+        trainRouteThreshold,
         save,
-    } = useContext(Context);
+    } = useContext(SharedContext);
 
-    useEffect(() => {
-        save();
-    }, [save, showStations, busRouteThreshold, trainRouteThreshold]);
+    function setShowStations(show: boolean) {
+        save({
+            stations: {
+                show,
+            },
+        });
+    }
+
+    function setTrainRouteThreshold(threshold: number) {
+        save({
+            stations: {
+                trainRouteThreshold: threshold,
+            },
+        });
+    }
+
+    function setBusRouteThreshold(threshold: number) {
+        save({
+            stations: {
+                busRouteThreshold: threshold,
+            },
+        });
+    }
 
     return <TreeNode id='stations' initiallyOpen={true}>
         <label className='font-bold'>
@@ -129,7 +149,7 @@ export function StationMarkers(): ReactNode {
     const {
         boundaryEditing, boundaryPath,
         showStations, busRouteThreshold, trainRouteThreshold,
-    } = useContext(Context);
+    } = useContext(SharedContext);
     const [ stations, setStations ] = useState([] as StationGroup[]);
 
     useEffect(() => {

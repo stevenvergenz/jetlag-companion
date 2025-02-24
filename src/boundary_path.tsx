@@ -5,7 +5,7 @@ import { LayerGroup, Polyline, useMap } from 'react-leaflet';
 import { Id } from './id';
 import { getAsync } from './overpass_cache';
 import { Relation, WayGroup, Way, Node } from './element';
-import { Context } from './context';
+import { SharedContext, notExcluded } from './context';
 
 const EnabledStyle: PathOptions = {
     stroke: true,
@@ -30,7 +30,8 @@ const DisabledStyle: PathOptions = {
 };
 
 export function BoundaryLayer(): ReactNode {
-    const { boundaryEditing, boundaryIncluded, boundaryExcluded, notBoundaryExcluded } = useContext(Context);
+    const { boundaryEditing, boundaryIncluded, boundaryExcluded } = useContext(SharedContext);
+    const notBoundaryExcluded = notExcluded(boundaryExcluded);
     const map = useMap();
 
     useEffect(() => {
@@ -70,7 +71,8 @@ type RelationPathProps = {
     id: Id,
 };
 export function RelationPath({ id }: RelationPathProps): ReactNode {
-    const { notBoundaryExcluded } = useContext(Context);
+    const { boundaryExcluded } = useContext(SharedContext);
+    const notBoundaryExcluded = notExcluded(boundaryExcluded);
     const [relation, setRelation] = useState(undefined as Relation | undefined);
 
     console.log('relation path', id);
@@ -94,7 +96,8 @@ type WayGroupPathProps = {
     wayGroup: WayGroup,
 };
 export function WayGroupPath({ wayGroup }: WayGroupPathProps): ReactNode {
-    const { notBoundaryExcluded } = useContext(Context);
+    const { boundaryExcluded } = useContext(SharedContext);
+    const notBoundaryExcluded = notExcluded(boundaryExcluded);
 
     console.log('way group path', wayGroup.id);
     return wayGroup.children
@@ -109,7 +112,7 @@ export function WayPath({ id }: WayPathProps): ReactNode {
     const {
         boundaryExcluded, boundaryErrors,
         hovering,
-    } = useContext(Context);
+    } = useContext(SharedContext);
     const [way, setWay] = useState(undefined as Way | undefined);
     const [renderOptions, setRenderOptions] = useState(DisabledStyle as PathOptions);
 

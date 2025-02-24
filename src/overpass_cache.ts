@@ -12,10 +12,6 @@ type TransportDbItem = {
     id: number,
 };
 
-type GetOptions = {
-    request: boolean,
-};
-
 /** The elements that have already been loaded */
 export const memCacheId = new Map<Id, QueryElement>();
 /** The set of element IDs associated with the current boundary */
@@ -202,11 +198,22 @@ async function requestAndCache(ids: Id[]): Promise<QueryResult> {
     return results;
 }
 
+type GetOptions = {
+    request: boolean,
+    cache: boolean,
+};
+
+const DefaultOptions: GetOptions = {
+    request: false,
+    cache: true,
+};
+
 export async function getAsync(
     ids: Id[],
-    { request }: GetOptions = { request: false },
+    opts?: Partial<GetOptions>,
 ): Promise<(Element | undefined)[]> {
     ids = ids.map(unreversed);
+    const { request, cache } = { ...DefaultOptions, ...opts };
 
     // unreverse and filter out waygroups
     const remainingIds = new Set<Id>(ids);
@@ -228,7 +235,7 @@ export async function getAsync(
         remainingIds.delete(id);
     }
 
-    if (request) {
+    if (request && cache) {
         // request everything not in flight
         const toRequest = [...remainingIds.values()].filter(id => !reqPromises.has(id));
         const p = requestAndCache(toRequest);
@@ -250,7 +257,7 @@ export async function getAsync(
             }
         }
     }
-    else {
+    else if (cache) {
         // fetch everything not in flight
         const toFetch = [...remainingIds.values()].filter(id => !cachePromises.has(id));
 

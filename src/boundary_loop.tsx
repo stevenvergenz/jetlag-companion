@@ -1,7 +1,7 @@
 import { ReactNode, useState, useEffect, useContext } from 'react';
 import { LatLngTuple, LatLngBounds, LatLngExpression } from 'leaflet';
 import { LayerGroup, Polygon, useMap } from 'react-leaflet';
-import { Context } from './context';
+import { SharedContext } from './context';
 import { BoundaryError, generateBoundaryLoopPath } from './boundary_calc';
 
 export function BoundaryLoop(): ReactNode {
@@ -12,7 +12,7 @@ export function BoundaryLoop(): ReactNode {
         setBoundaryPath,
         setBoundaryErrors,
         boundaryEditing,
-    } = useContext(Context);
+    } = useContext(SharedContext);
     const [poly, setPoly] = useState([] as LatLngExpression[][]);
 
     useEffect(() => {

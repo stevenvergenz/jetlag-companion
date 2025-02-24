@@ -4,14 +4,14 @@ import { Id, pack, unpack } from './id';
 import { getAsync } from './overpass_cache';
 import { Relation, Way, WayGroup } from './element';
 import { TreeNode } from './tree_node';
-import { Context } from './context';
+import { SharedContext, notExcluded } from './context';
 
 export function BoundaryConfig(): ReactNode {
     const {
         boundaryEditing, setBoundaryEditing,
-        boundaryIncluded, setBoundaryIncluded,
+        boundaryIncluded,
         save
-    } = useContext(Context);
+    } = useContext(SharedContext);
     const [newId, setNewId] = useState('');
 
     function addRelation() {
@@ -26,9 +26,9 @@ export function BoundaryConfig(): ReactNode {
 
         const id = pack({ type: 'relation', id: numberId });
         if (!boundaryIncluded.has(id)) {
-            setBoundaryIncluded(new Set([...boundaryIncluded, id]));
+            const newInclude = new Set([...boundaryIncluded, id]);
             setNewId('');
-            save();
+            save({ boundary: { included: newInclude }});
         }
     }
 
@@ -52,9 +52,11 @@ type RelationConfigProps = {
 
 export function RelationConfig({ id }: RelationConfigProps): ReactNode {
     const {
-        boundaryExcluded, setBoundaryExcluded, notBoundaryExcluded,
+        boundaryExcluded,
         hovering, setHovering,
-    } = useContext(Context);
+        save,
+    } = useContext(SharedContext);
+    const notBoundaryExcluded = notExcluded(boundaryExcluded);
 
     const [relation, setRelation] = useState(undefined as Relation | undefined);
 
@@ -71,10 +73,10 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
         if (!relation) { return }
         const isIncluded = notBoundaryExcluded(relation);
         if (state && !isIncluded) {
-            setBoundaryExcluded(new Set([...boundaryExcluded].filter((id) => id !== relation.id)));
+            save({ boundary: { excluded: new Set([...boundaryExcluded].filter((id) => id !== relation.id)) }});
         }
         else if (!state && isIncluded) {
-            setBoundaryExcluded(new Set([...boundaryExcluded, relation.id]));
+            save({ boundary: { excluded: new Set([...boundaryExcluded, relation.id]) }});
         }
     }
 
@@ -114,9 +116,11 @@ type WayGroupConfigProps = {
 
 export function WayGroupConfig({ wayGroup }: WayGroupConfigProps): ReactNode {
     const {
-        boundaryExcluded, setBoundaryExcluded, notBoundaryExcluded,
+        boundaryExcluded,
         hovering, setHovering,
-    } = useContext(Context);
+        save,
+    } = useContext(SharedContext);
+    const notBoundaryExcluded = notExcluded(boundaryExcluded);
 
     const [inheritEnabled, setInheritEnabled] = useState(true);
     const [enabled, setEnabledLocal] = useState(true);
@@ -127,13 +131,20 @@ export function WayGroupConfig({ wayGroup }: WayGroupConfigProps): ReactNode {
     }, [wayGroup, boundaryExcluded, notBoundaryExcluded])
 
     function setEnabled(state: boolean) {
-        if (!wayGroup) { return }
+        if (!wayGroup) { return; }
+
         const isIncluded = notBoundaryExcluded(wayGroup);
         if (state && !isIncluded) {
-            setBoundaryExcluded(new Set([...boundaryExcluded].filter((id) => id !== wayGroup.id)));
+            const newExclude = new Set([...boundaryExcluded].filter((id) => id !== wayGroup.id));
+            save({
+                boundary: { excluded: newExclude },
+            });
         }
         else if (!state && isIncluded) {
-            setBoundaryExcluded(new Set([...boundaryExcluded, wayGroup.id]));
+            const newExclude = new Set([...boundaryExcluded, wayGroup.id]);
+            save({
+                boundary: { excluded: newExclude },
+            });
         }
     }
 
@@ -161,10 +172,12 @@ type WayConfigProps = {
 
 export function WayConfig({ id }: WayConfigProps): ReactNode {
     const {
-        boundaryExcluded, setBoundaryExcluded, notBoundaryExcluded,
+        boundaryExcluded,
         hovering, setHovering,
-    } = useContext(Context);
-
+        save,
+    } = useContext(SharedContext);
+    const notBoundaryExcluded = notExcluded(boundaryExcluded);
+    
     const [way, setWay] = useState(undefined as Way | undefined);
     const [inheritEnabled, setInheritEnabled] = useState(true);
     const [enabled, setEnabledLocal] = useState(true);
@@ -187,11 +200,18 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
     function setEnabled(state: boolean) {
         if (!way) { return }
         const isIncluded = notBoundaryExcluded(way);
+        
         if (state && !isIncluded) {
-            setBoundaryExcluded(new Set([...boundaryExcluded].filter((id) => id !== way.id)));
+            const newExclude = new Set([...boundaryExcluded].filter((id) => id !== way.id));
+            save({
+                boundary: { excluded: newExclude },
+            });
         }
         else if (!state && isIncluded) {
-            setBoundaryExcluded(new Set([...boundaryExcluded, way.id]));
+            const newExclude = new Set([...boundaryExcluded, way.id]);
+            save({
+                boundary: { excluded: newExclude },
+            });
         }
     }
 
