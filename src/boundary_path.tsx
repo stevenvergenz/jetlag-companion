@@ -38,7 +38,7 @@ export function BoundaryLayer(): ReactNode {
         async function recalcBounds() {
             if (!map || !boundaryEditing) { return; }
             
-            console.log('Updating bounds');
+            console.log('[bounds] Updating bounds');
     
             const bounds = new LatLngBounds(
                 // loaded enabled relations
@@ -75,7 +75,7 @@ export function RelationPath({ id }: RelationPathProps): ReactNode {
     const notBoundaryExcluded = notExcluded(boundaryExcluded);
     const [relation, setRelation] = useState(undefined as Relation | undefined);
 
-    console.log('relation path', id);
+    console.log('[bounds] relation path', id);
     useEffect(() => {
         if (!relation || relation.id !== id) {
             getAsync([id]).then(([e]) => {
@@ -99,7 +99,7 @@ export function WayGroupPath({ wayGroup }: WayGroupPathProps): ReactNode {
     const { boundaryExcluded } = useContext(SharedContext);
     const notBoundaryExcluded = notExcluded(boundaryExcluded);
 
-    console.log('way group path', wayGroup.id);
+    console.log('[bounds] way group path', wayGroup.id);
     return wayGroup.children
         .filter(e => e instanceof Way && notBoundaryExcluded(e))
         .map(w => <WayPath key={w.id} id={w.id} />);
@@ -116,7 +116,7 @@ export function WayPath({ id }: WayPathProps): ReactNode {
     const [way, setWay] = useState(undefined as Way | undefined);
     const [renderOptions, setRenderOptions] = useState(DisabledStyle as PathOptions);
 
-    console.log('way path', id);
+    console.log('[bounds] way path', id);
 
     useEffect(() => {
         if (!way || way.id !== id) {

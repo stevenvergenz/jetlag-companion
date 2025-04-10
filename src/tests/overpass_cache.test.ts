@@ -31,3 +31,13 @@ test('request and get', async () => {
         expect(p2).resolves.toHaveLength(1),
     ]);
 });
+
+test ('double request', async () => {
+    await dbClear();
+    const p1 = getAsync(['r:122604'], { request: true });
+    const p2 = getAsync(['r:122604'], { request: true });
+    await Promise.all([
+        expect(p1).resolves.toHaveLength(1),
+        expect(p2).resolves.toHaveLength(1),
+    ]);
+});

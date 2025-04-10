@@ -1,6 +1,6 @@
 import { ReactNode, useContext, useEffect, useState } from 'react';
 
-import { Id, pack, unpack } from './id';
+import { Id, pack, packFrom, unpack } from './id';
 import { getAsync } from './overpass_cache';
 import { Relation, Way, WayGroup } from './element';
 import { TreeNode } from './tree_node';
@@ -61,14 +61,29 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
     const [relation, setRelation] = useState(undefined as Relation | undefined);
 
     useEffect(() => {
+        let ignore = false;
         if (!relation || relation.id !== id) {
-            getAsync([id]).then(([r]) => setRelation(r as Relation));
+            getAsync([id])
+                .then(async ([r]) => {
+                    if (r instanceof Relation && !ignore) {
+                        const wayIds = r.data.members
+                            .flatMap(m => m.type === 'way' ? [packFrom(m)] : []);
+                        console.log('[menu]', wayIds);
+                        await getAsync(wayIds);
+                        console.log('[menu] Ways:', r.children.filter(e => e instanceof Way).length);
+                        r.calcWayGroups();
+                        console.log('[menu] Way groups:', r.wayGroups?.size);
+                        setRelation(r);
+                    }
+                });
+            return () => { ignore = true; };
         }
     }, [id, relation]);
 
     function enabled() {
         return relation && notBoundaryExcluded(relation);
     }
+    
     function setEnabled(state: boolean) {
         if (!relation) { return }
         const isIncluded = notBoundaryExcluded(relation);

@@ -154,7 +154,7 @@ export function mergeRelations(
     while (!addedIds.has(id)) {
         const thisLeg = legs.get(id)!;
         if (thisLeg.intersections.size !== 2 || !thisLeg.intersections.has(from)) {
-            console.log(`Leg ${id} has ${thisLeg.intersections.size} intersections`);
+            console.log(`[boundary] Leg ${id} has ${thisLeg.intersections.size} intersections`);
             return undefined;
         }
 
@@ -237,7 +237,7 @@ export function calcRelationPath(relation: Relation, excluded: Set<Id>, distance
             map.set(leg.id, leg);
             return map;
         }, new Map<Id, WayLeg>());
-    console.log(`Relation ${relation.id} has ${legs.size} legs`);
+    console.log(`[boundary] Relation ${relation.id} has ${legs.size} legs`);
 
     // compare each end of each way group to every other end and match them by distance and orientation
 
@@ -273,7 +273,7 @@ export function calcRelationPath(relation: Relation, excluded: Set<Id>, distance
         }
 
         if (bestMatch.end && bestMatch.dist <= MaxDistanceMeters && bestMatch.dot <= MaxDot) {
-            console.log('match found', bestMatch.end, ref);
+            console.log('[boundary] match found', bestMatch.end, ref);
             ref.continuedBy = bestMatch.end.id;
             bestMatch.end.continuedBy = ref.id;
         }

@@ -88,7 +88,7 @@ async function dbPut(tx: IDBTransaction, e: QueryElement, bounds?: string): Prom
 
     const cb = deferredCallbacks.get(e.id);
     if (cb) {
-        console.log('calling deferred get for', e.id);
+        console.log('[load] calling deferred get for', e.id);
         cb(e);
         deferredCallbacks.delete(e.id);
         deferredPromises.delete(e.id);
@@ -103,6 +103,7 @@ async function dbPutAll(db: IDBDatabase, es: QueryResult, bounds?: string): Prom
 }
 
 async function dbGetById(db: IDBDatabase, ids: Id[]): Promise<QueryResult> {
+    console.log(`[cache] Fetching ${ids.join(', ')}`);
     const tx = db.transaction('elements', 'readonly');
     const store = tx.objectStore('elements');
 
@@ -168,10 +169,15 @@ function getDeferred(id: Id): Promise<QueryElement> {
 }
 
 async function requestAndCache(ids: Id[]): Promise<QueryResult> {
+    if (ids.length === 0) {
+        return new Map();
+    }
+    
     const results: QueryResult = new Map();
 
     const db = await dbInit();
     const dbEs = await dbGetById(db, ids);
+    console.log(`[load] Found ${dbEs.size} elements in cache`);
     for (const e of dbEs.values()) {
         if (e) {
             results.set(e.id, e);
@@ -179,12 +185,15 @@ async function requestAndCache(ids: Id[]): Promise<QueryResult> {
     }
 
     const requestIds = ids.filter(id => !results.has(id));
-    const reqEs = await requestAsync(requestIds);
-    await dbPutAll(db, reqEs); 
+    if (requestIds.length > 0) {
+        const reqEs = await requestAsync(requestIds);
+        await dbPutAll(db, reqEs); 
+        console.log(`[load] Fetched ${reqEs.size} elements from server`);
 
-    for (const e of reqEs.values()) {
-        if (e) {
-            results.set(e.id, e);
+        for (const e of reqEs.values()) {
+            if (e) {
+                results.set(e.id, e);
+            }
         }
     }
 
@@ -204,7 +213,7 @@ type GetOptions = {
 };
 
 const DefaultOptions: GetOptions = {
-    request: false,
+    request: true,
     cache: true,
 };
 
@@ -218,12 +227,17 @@ export async function getAsync(
     // unreverse and filter out waygroups
     const remainingIds = new Set<Id>(ids);
     const results = new Map<Id, Element | undefined>();
+    console.log(`[load] ${remainingIds.size} elements requested`);
 
     // objects already loaded, return from memory cache
     const memCached = [...remainingIds.values()].filter(id => memCacheId.has(id));
     for (const id of memCached) {
         results.set(id, memCacheId.get(id)!);
         remainingIds.delete(id);
+    }
+    console.log('[load] After memcache,', remainingIds.size, 'elements remaining');
+    if (remainingIds.size === 0) {
+        return ids.map(id => results.get(id));
     }
 
     // waygroups are not stored in memory cache, but their parent relations are
@@ -234,10 +248,15 @@ export async function getAsync(
         results.set(id, r?.wayGroups?.get(id));
         remainingIds.delete(id);
     }
+    console.log('[load] After waygroups,', remainingIds.size, 'elements remaining');
+    if (remainingIds.size === 0) {
+        return ids.map(id => results.get(id));
+    }
 
     if (request && cache) {
         // request everything not in flight
         const toRequest = [...remainingIds.values()].filter(id => !reqPromises.has(id));
+        console.log(`[load] Starting ${toRequest.length} cache+requests`);
         const p = requestAndCache(toRequest);
         for (const id of toRequest) {
             reqPromises.set(id,
@@ -256,10 +275,12 @@ export async function getAsync(
                 remainingIds.delete(pendingE.id);
             }
         }
+        console.log('[load] After cached/requests,', remainingIds.size, 'elements remaining');
     }
     else if (cache) {
         // fetch everything not in flight
         const toFetch = [...remainingIds.values()].filter(id => !cachePromises.has(id));
+        console.log(`[load] Starting ${toFetch.length} cached`);
 
         const db = await dbInit();
         const p = dbGetById(db, toFetch);
@@ -279,8 +300,13 @@ export async function getAsync(
                 remainingIds.delete(pendingE.id);
             }
         }
+        console.log('[load] After cached,', remainingIds.size, 'elements remaining');
+    }
+    if (remainingIds.size === 0) {
+        return ids.map(id => results.get(id));
     }
 
+    console.log(`[load] Deferring ${remainingIds.size} elements`);
     const deferred = [...remainingIds.values()].map(id => getDeferred(id));
     const deferredEs = await Promise.all(deferred);
     for (const e of deferredEs) {

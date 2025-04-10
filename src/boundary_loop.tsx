@@ -33,10 +33,10 @@ export function BoundaryLoop(): ReactNode {
             }
 
             if (!p) {
-                console.log('Boundary path not closed');
+                console.log('[boundary] Boundary path not closed');
                 return;
             } else {
-                console.log(`Boundary path closed with ${p.length} points`);
+                console.log(`[boundary] Boundary path closed with ${p.length} points`);
             }
 
             setBoundaryPath(p);
