@@ -46,17 +46,29 @@ async function dbInit(): Promise<IDBDatabase> {
     return await dbReq(req);
 }
 
-export async function dbClear(): Promise<void> {
-    memCacheId.clear();
-    memCacheTransport = undefined;
-    memCacheTransportBounds = undefined;
+type ClearOptions = {
+    clearMem: boolean,
+    clearCache: boolean,
+};
+const DefaultClearOptions: ClearOptions = { clearMem: true, clearCache: true };
 
-    const db = await dbInit();
-    const tx = db.transaction(['transport', 'elements'], 'readwrite');
-    const eStore = tx.objectStore('elements');
-    const tStore = tx.objectStore('transport');
-    await Promise.all([dbReq(eStore.clear()), dbReq(tStore.clear())]);
-    db.close();
+export async function dbClear(opts: Partial<ClearOptions> = {}): Promise<void> {
+    const { clearMem, clearCache } = { ...DefaultClearOptions, ...opts };
+    
+    if (clearMem) {
+        memCacheId.clear();
+        memCacheTransport = undefined;
+        memCacheTransportBounds = undefined;
+    }
+
+    if (clearCache) {
+        const db = await dbInit();
+        const tx = db.transaction(['transport', 'elements'], 'readwrite');
+        const eStore = tx.objectStore('elements');
+        const tStore = tx.objectStore('transport');
+        await Promise.all([dbReq(eStore.clear()), dbReq(tStore.clear())]);
+        db.close();
+    }
 }
 
 async function dbPut(tx: IDBTransaction, e: QueryElement, bounds?: string): Promise<void> {
@@ -172,7 +184,7 @@ async function requestAndCache(ids: Id[]): Promise<QueryResult> {
     if (ids.length === 0) {
         return new Map();
     }
-    
+
     const results: QueryResult = new Map();
 
     const db = await dbInit();

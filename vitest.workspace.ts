@@ -5,14 +5,16 @@ export default defineWorkspace([
   // 'vite.config.ts',
   {
     extends: 'vite.config.ts',
+    // optimizeDeps: { include: ['fake-indexeddb/auto'] },
     test: {
+      // setupFiles: ['./src/tests/setup.ts'],
       browser: {
         //headless: true,
         enabled: true,
         provider: 'playwright',
         // https://vitest.dev/guide/browser/playwright
         instances: [
-          //{ browser: 'chromium' },
+          // { browser: 'chromium' },
           { browser: 'firefox' },
         ]
       },
