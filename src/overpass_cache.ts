@@ -130,14 +130,17 @@ async function dbGetById(db: IDBDatabase, ids: Id[]): Promise<QueryResult> {
         if (!eData) { continue; }
         if (eData.type === 'node') {
             const n = new Node(pack(eData), eData);
+            memCacheId.set(n.id, n);
             results.set(n.id, n);
         }
         else if (eData.type === 'way') {
             const w = new Way(pack(eData), eData);
+            memCacheId.set(w.id, w);
             results.set(w.id, w);
         }
         else if (eData.type === 'relation') {
             const r = new Relation(pack(eData), eData);
+            memCacheId.set(r.id, r);
             results.set(r.id, r);
         }
     }
@@ -285,6 +288,7 @@ export async function getAsync(
             if (pendingE && remainingIds.has(pendingE.id)) {
                 results.set(pendingE.id, pendingE);
                 remainingIds.delete(pendingE.id);
+                deferredCallbacks.get(pendingE.id)?.(pendingE);
             }
         }
         console.log('[load] After cached/requests,', remainingIds.size, 'elements remaining');
@@ -310,6 +314,7 @@ export async function getAsync(
             if (pendingE && remainingIds.has(pendingE.id)) {
                 results.set(pendingE.id, pendingE);
                 remainingIds.delete(pendingE.id);
+                deferredCallbacks.get(pendingE.id)?.(pendingE);
             }
         }
         console.log('[load] After cached,', remainingIds.size, 'elements remaining');

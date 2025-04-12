@@ -1,5 +1,5 @@
 import { expect, test, beforeEach } from 'vitest';
-import { dbClear, getAsync } from '../overpass_cache';
+import { dbClear, getAsync, get } from '../overpass_cache';
 
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -42,4 +42,10 @@ test('double request', async () => {
         expect(p1).resolves.toHaveLength(1),
         expect(p2).resolves.toHaveLength(1),
     ]);
+});
+
+test('get sync', async () => {
+    await expect(getAsync(['r:2859048'], { request: true, cache: true })).resolves.toHaveLength(1);
+    const r = get('r:2859048');
+    expect(r).toBeDefined();
 });

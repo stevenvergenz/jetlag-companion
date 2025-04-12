@@ -48,6 +48,7 @@ export class HierarchyHelper {
     }
 
     public static fulfillInterestRelationWay(child: Way, parent: Relation) {
+        console.log(`[graph] checking groups with ${child.id} for ${parent.id}`);
         /** All roles for the fulfilled way */
         const roles = new Set(parent.data.members
             .filter(m => packFrom(m) === child.id)
@@ -206,8 +207,15 @@ export class Relation extends Element {
             return;
         }
 
+        const wayIds = this.childIds.filter(id => unpack(id).type === 'way');
+        const ways = this.children.filter(e => e instanceof Way);
+        if (ways.length !== wayIds.length) {
+            return;
+        }
+
+        console.log(`[graph] Calculating waygroups for ${this.id} with ${ways.length} ways`);
         this.wayGroups = new Map();
-        for (const w of this.children.filter(e => e instanceof Way)) {
+        for (const w of ways) {
             HierarchyHelper.fulfillInterestRelationWay(w, this);
         }
     }

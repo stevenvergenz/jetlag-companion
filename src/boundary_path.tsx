@@ -78,8 +78,9 @@ export function RelationPath({ id }: RelationPathProps): ReactNode {
     console.log('[bounds] relation path', id);
     useEffect(() => {
         if (!relation || relation.id !== id) {
-            getAsync([id]).then(([e]) => {
+            getAsync([id]).then(async ([e]) => {
                 const r = e as Relation;
+                await getAsync(r.childIds, { request: true });
                 r.calcWayGroups();
                 setRelation(r);
             })
@@ -120,7 +121,11 @@ export function WayPath({ id }: WayPathProps): ReactNode {
 
     useEffect(() => {
         if (!way || way.id !== id) {
-            getAsync([id]).then(([w]) => setWay(w as Way));
+            getAsync([id]).then(async ([w]) => {
+                const way = w as Way;
+                await getAsync(way.childIds, { request: true });
+                setWay(w as Way);
+            });
         }
     }, [id, way]);
 
