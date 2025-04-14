@@ -1,10 +1,9 @@
-import { createContext, ReactNode, useEffect, useState } from 'react';
+import { createContext, ReactNode, useState } from 'react';
 import { LatLngTuple } from 'leaflet';
 
-import { getAsync } from './overpass_cache';
-import { Id, pack } from './id';
-import { Element, Relation, Way } from './element';
-import { load, save, Config, PartialConfig } from './config';
+import { Id } from './id';
+import { Element } from './element';
+import { load, save, PartialConfig } from './config';
 
 type ContextContent = {
     boundaryIncluded: Set<Id>,
@@ -137,35 +136,6 @@ export function ContextProvider({ children }: { children: ReactNode }) {
             });
         },
     };
-
-    /*useEffect(() => {
-        function notBoundaryExcluded(id: Element | Id) {
-            return !boundaryExcluded.has(typeof(id) === 'string' ? id : id.id);
-        }
-
-        async function helper() {
-            console.log('Fetching boundaries');
-
-            const relIds = [...boundaryIncluded].filter(notBoundaryExcluded);
-            const relations = await getAsync(relIds, { request: true }) as Relation[];
-
-            const wayIds = relations
-                .flatMap(r => r.data.members)
-                .map(m => ({ type: m.type, id: m.ref }))
-                .filter(id => id.type === 'way')
-                .map(id => pack(id))
-                .filter(notBoundaryExcluded);
-            const ways = (await getAsync(wayIds, { request: true })) as Way[];
-
-            const nodeIds = ways
-                .filter(notBoundaryExcluded)
-                .flatMap(w => w.childIds);
-            await getAsync(nodeIds, { request: true });
-        }
-
-        helper();
-
-    }, [boundaryIncluded, boundaryExcluded]);*/
 
     return <SharedContext.Provider value={context}>
         {children}

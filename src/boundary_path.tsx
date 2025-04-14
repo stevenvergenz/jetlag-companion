@@ -35,29 +35,28 @@ export function BoundaryLayer(): ReactNode {
     const map = useMap();
 
     useEffect(() => {
-        async function recalcBounds() {
-            if (!map || !boundaryEditing) { return; }
-            
-            console.log('[bounds] Updating bounds');
-    
-            const bounds = new LatLngBounds(
-                // loaded enabled relations
-                (await getAsync([...boundaryIncluded].filter(notBoundaryExcluded)) as Relation[])
-                // enabled way groups
-                .flatMap(r => r.children.filter(e => e instanceof WayGroup && notBoundaryExcluded(e)))
-                // enabled ways
-                .flatMap(wg => wg.children.filter(notBoundaryExcluded))
-                // nodes
-                .flatMap(w => w.children as Node[])
-                // convert to LatLngTuple
-                .map(n => [n.lat, n.lon] as LatLngTuple)
-            );
-    
+        getAsync([...boundaryIncluded].filter(notBoundaryExcluded))
+        .then(async (rs) => {
+            const waygroups = (await Promise.all(rs.map(r => (r as Relation).getWayGroupsAsync()))).flat();
+            const usedNodeIds = waygroups.flatMap(wg => {
+                if (notBoundaryExcluded(wg.id)) {
+                    return wg.children.flatMap(w => {
+                        if (notBoundaryExcluded(w.id)) {
+                            return w.childIds;
+                        } else {
+                            return [];
+                        }
+                    });
+                } else {
+                    return [];
+                }
+            });
+            const nodes = (await getAsync(usedNodeIds)) as Node[];
+            const bounds = new LatLngBounds(nodes.map(n => [n.lat, n.lon]));
             if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [0, 0] });
             }
-        }
-        recalcBounds();
+        });
     }, [boundaryIncluded, boundaryExcluded, notBoundaryExcluded, map, boundaryEditing]);
 
     if (boundaryEditing) {

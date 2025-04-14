@@ -2,7 +2,7 @@ import { LatLngTuple } from 'leaflet';
 
 import { OsmElement, OsmNode, OsmRelation, OsmWay, OsmWayGroup } from "./overpass_api";
 import { Id, pack, packFrom, unpack, reverse, unreversed } from './id';
-import { get } from './overpass_cache';
+import { get, getAsync } from './overpass_cache';
 
 export class HierarchyHelper {
     private static interests = new Map<Id, Set<Id>>();
@@ -218,6 +218,13 @@ export class Relation extends Element {
         for (const w of ways) {
             HierarchyHelper.fulfillInterestRelationWay(w, this);
         }
+    }
+
+    public async getWayGroupsAsync(): Promise<WayGroup[]> {
+        const wayIds = this.childIds.filter(id => unpack(id).type === 'way');
+        await getAsync(wayIds);
+        this.calcWayGroups();
+        return [...this.wayGroups!.values()];
     }
 }
 
