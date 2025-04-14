@@ -90,6 +90,13 @@ export async function generateBoundaryLoopPath(
 export function mergeRelations(
     relations: Relation[], excluded: Set<Id>, distanceFn: DistanceFn,
 ): LatLngTuple[] | undefined {
+    if (relations.length === 1) {
+        const path = calcRelationPath(relations[0], excluded, distanceFn);
+        if (path[0].every((c, i) => path[path.length - 1][i] === c)) {
+            return path;
+        }
+    }
+
     const legs = relations
         .map(r => {
             const path = calcRelationPath(r, excluded, distanceFn);
