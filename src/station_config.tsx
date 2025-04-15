@@ -38,6 +38,7 @@ class StationGroup {
     public station?: Way | Node;
     public stopAreas: Map<Id, Relation> = new Map();
     public platforms: Map<Id, (Way | Node)> = new Map();
+    public routes: Map<Id, Relation> = new Map();
     public routeMasters: Map<Id, Relation> = new Map();
 
     public get id(): Id {
@@ -80,9 +81,9 @@ class StationGroup {
             this.platforms = StationGroup.findDown('platform', this.stopAreas);
         }
 
-        const routes = StationGroup.findUp<Relation>('route', this.platforms);
+        this.routes = StationGroup.findUp<Relation>('route', this.platforms);
 
-        this.routeMasters = StationGroup.findUp<Relation>('route_master', routes);
+        this.routeMasters = StationGroup.findUp<Relation>('route_master', this.routes);
     }
 
     public has(element: Element): boolean {
@@ -171,6 +172,7 @@ export function StationMarkers(): ReactNode {
                 }
                 station.add(platform);
             }
+            console.log(`[station] ${stations.length} stations found`);
             setStations(stations);
         }
         helper();
@@ -230,11 +232,22 @@ export function StationMarkers(): ReactNode {
     }
 
     function shouldShow(station: StationGroup): boolean {
+        // total route masters to this station
         const types = new Map<string, number>();
         for (const rm of station.routeMasters.values()) {
             const type = rm.data.tags!.route_master;
             types.set(type, (types.get(type) ?? 0) + 1);
         }
+
+        // total unmastered routes to this station
+        for (const r of station.routes.values()) {
+            if (r.parentIds.size > 0) {
+                continue;
+            }
+            const type = r.data.tags!.route;
+            types.set(type, (types.get(type) ?? 0) + 0.5);
+        }
+        console.log(types);
 
         const otherTypes = [...types.keys()].filter(t => !busTypes.includes(t) && !trainTypes.includes(t));
 
@@ -245,9 +258,11 @@ export function StationMarkers(): ReactNode {
         || otherTypes.length > 0;
     }
 
+    const s = stations.filter(shouldShow).map(s => renderStation(s));
+    console.log(`[station] ${s.length} stations to show`);
     if (boundaryPath && !boundaryEditing && showStations) {
         return <LayerGroup>
-            {stations.filter(shouldShow).map(s => renderStation(s))}
+            {s}
         </LayerGroup>;
     }
 }
