@@ -162,9 +162,13 @@ export function StationMarkers(): ReactNode {
                 'platform',
                 { request: true },
             );
+            console.log(`[station] ${platforms.length} platforms found`);
 
             const stations = [] as StationGroup[];
             for (const platform of platforms) {
+                if (platform.data.tags?.railway !== undefined) {
+                    console.log(platform);
+                }
                 let station = stations.find(s => s.has(platform));
                 if (!station) {
                     station = new StationGroup();
@@ -173,6 +177,7 @@ export function StationMarkers(): ReactNode {
                 station.add(platform);
             }
             console.log(`[station] ${stations.length} stations found`);
+
             setStations(stations);
         }
         helper();
@@ -234,6 +239,7 @@ export function StationMarkers(): ReactNode {
     function shouldShow(station: StationGroup): boolean {
         // total route masters to this station
         const types = new Map<string, number>();
+
         for (const rm of station.routeMasters.values()) {
             const type = rm.data.tags!.route_master;
             types.set(type, (types.get(type) ?? 0) + 1);
@@ -242,12 +248,12 @@ export function StationMarkers(): ReactNode {
         // total unmastered routes to this station
         for (const r of station.routes.values()) {
             if (r.parentIds.size > 0) {
+                console.warn(`[station] ${r.id} has parent ids, but is not a route master`);
                 continue;
             }
             const type = r.data.tags!.route;
             types.set(type, (types.get(type) ?? 0) + 0.5);
         }
-        console.log(types);
 
         const otherTypes = [...types.keys()].filter(t => !busTypes.includes(t) && !trainTypes.includes(t));
 

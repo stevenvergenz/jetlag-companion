@@ -70,7 +70,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
     const [boundaryIncluded, setBoundaryIncluded] = useState(config.boundary.included);
     const [boundaryExcluded, setBoundaryExcluded] = useState(config.boundary.excluded);
     const [boundaryPath, setBoundaryPath] = useState(undefined as LatLngTuple[] | undefined);
-    const [boundaryEditing, setBoundaryEditing] = useState(true);
+    const [boundaryEditing, setBoundaryEditing] = useState(false);
     const [boundaryErrors, setBoundaryErrors] = useState(new Set<Id>());
 
     const [showStations, setShowStations] = useState(config.stations.show);

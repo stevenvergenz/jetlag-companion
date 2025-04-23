@@ -6,7 +6,7 @@ import { Id, pack, unpack, unreversed } from './id';
 import { Element, Node, Relation, Way } from './element';
 import { QueryElement, QueryResult, OsmElement, OsmElementType, requestAsync, requestTransport } from './overpass_api';
 
-type TransportType = 'platform' | 'station' | 'stop_area' | 'route' | 'route_master';
+type TransportType = 'platform' | 'station' | 'stop_area' | 'route' | 'route_master' | undefined;
 
 type TransportDbItem = {
     bounds: string,
@@ -81,16 +81,13 @@ async function dbPut(tx: IDBTransaction, e: QueryElement, bounds?: string): Prom
     memCacheId.set(e.id, e);
     await dbReq(eStore.put(e.data));
 
-    if (bounds && e.data.tags && (
-        e.data.tags.public_transport 
-        || ['route', 'route_master'].includes(e.data.tags.type)
-    )) {
+    if (bounds) {
         if (memCacheTransportBounds !== bounds) {
             memCacheTransportBounds = bounds;
             memCacheTransport = new Set<Id>();
         }
 
-        const tType = (e.data.tags.public_transport ?? e.data.tags.type) as TransportType;
+        const tType = (e.data.tags?.public_transport ?? e.data.tags?.type) as TransportType;
         memCacheTransport?.add(e.id);
             
         await dbReq(tStore.put({
@@ -163,11 +160,14 @@ async function dbGetTransportByBounds(db: IDBDatabase, bounds: string): Promise<
 
     let ids = [] as Id[];
     if (memCacheTransportBounds !== undefined && memCacheTransportBounds === bounds && memCacheTransport) {
+        console.log(`[cache] Using mem-cached transport elements for ${bounds}`);
         ids = [...memCacheTransport];
     }
     else {
+        console.log(`[cache] Fetching cached transport elements for ${bounds}`);
         const items = await dbReq(tStore.index('bounds').getAll(bounds)) as TransportDbItem[];
         ids = items.map(item => pack({ type: item.type, id: item.id }));
+        console.log(`[cache] Found ${ids.length} transport elements in cache`);
     }
 
     return await dbGetById(db, ids);
@@ -366,9 +366,12 @@ export async function getByTransportTypeAsync<T extends QueryElement>(
     const db = await dbInit();
 
     let es = await dbGetTransportByBounds(db, boundsStr);
+    console.log(`[cache] Found ${es.size} transport elements in cache`);
     if (opts.request && es.size === 0) {
         const ids = await requestTransport(boundsStr);
+        console.log(`[load] Found ${ids.length} transport elements in request`);
         es = await requestAsync(ids);
+        console.log(`[load] Fetched ${es.size} transport elements from server`);
         await dbPutAll(db, es, boundsStr);
     }
 
@@ -389,13 +392,14 @@ function filterByPoly(elements: QueryResult, polygon: Feature): QueryResult {
     const filtered: QueryResult = new Map();
     const excluded = new Set<Id>();
 
-    function containedByPoly(element?: Element): boolean {
+    function containedByPoly(element?: Element) {
         if (!element || excluded.has(element.id)) {
             return false;
         } else if (filtered.has(element.id)) {
             return true;
         } else if (element instanceof Node) {
             if (turf.booleanContains(polygon, turf.point([element.lon, element.lat]))) {
+                //console.log(`[poly] ${element.id} (${element.data.tags?.public_transport}) contained in poly`);
                 filtered.set(element.id, element);
                 return true;
             } else {
@@ -404,6 +408,7 @@ function filterByPoly(elements: QueryResult, polygon: Feature): QueryResult {
             }
         } else if (element instanceof Way || element instanceof Relation) {
             if (element.children.some(n => containedByPoly(n))) {
+                //console.log(`[poly] ${element.id} (${element.data.tags?.public_transport}) contained in poly`);
                 filtered.set(element.id, element);
                 return true;
             } else {
