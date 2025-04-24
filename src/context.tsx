@@ -4,6 +4,7 @@ import { LatLngTuple } from 'leaflet';
 import { Id } from './id';
 import { Element } from './element';
 import { load, save, PartialConfig } from './config';
+import StationGroup from './stationGroup';
 
 type ContextContent = {
     boundaryIncluded: Set<Id>,
@@ -24,6 +25,8 @@ type ContextContent = {
     //setBusRouteThreshold: React.Dispatch<React.SetStateAction<number>>,
     trainRouteThreshold: number,
     //setTrainRouteThreshold: React.Dispatch<React.SetStateAction<number>>,
+    stations: StationGroup[],
+    setStations: React.Dispatch<React.SetStateAction<StationGroup[]>>,
 
     hovering: Id,
     setHovering: (n: Id) => void,
@@ -51,7 +54,8 @@ const dummyContent: ContextContent = {
     //setBusRouteThreshold: () => {},
     trainRouteThreshold: 1,
     //setTrainRouteThreshold: () => {},
-    
+    stations: [],
+    setStations: () => {},
 
     hovering: '',
     setHovering: () => {},
@@ -76,6 +80,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
     const [showStations, setShowStations] = useState(config.stations.show);
     const [busRouteThreshold, setBusRouteThreshold] = useState(config.stations.busRouteThreshold);
     const [trainRouteThreshold, setTrainRouteThreshold] = useState(config.stations.trainRouteThreshold);
+    const [stations, setStations] = useState([] as StationGroup[]);
 
     const [hovering, setHovering] = useState('');
 
@@ -91,6 +96,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         showStations, //setShowStations,
         busRouteThreshold, //setBusRouteThreshold,
         trainRouteThreshold, //setTrainRouteThreshold,
+        stations, setStations,
 
         hovering, setHovering,
         save: (config: PartialConfig) => {
