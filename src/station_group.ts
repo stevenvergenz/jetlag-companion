@@ -1,5 +1,6 @@
 import { Id } from './id';
 import { Element, Relation, Way, Node } from './element';
+import { OsmRelation } from './overpass_api';
 
 export default class StationGroup {
     private static findUp<T extends Element>(tag: string, es: Map<Id, Element>): Map<Id, T> {
@@ -75,5 +76,55 @@ export default class StationGroup {
         return this.platforms.has(element.id)
             || this.stopAreas.has(element.id)
             || this.station?.id === element.id;
+    }
+
+    public save(): Relation {
+        const data: OsmRelation = {
+            id: 252525,
+            type: 'relation',
+            members: [],
+        };
+
+        if (this.station) {
+            data.members.push({
+                ref: this.station.data.id,
+                type: this.station.data.type,
+                role: 'station',
+            });
+        }
+
+        for (const p of this.platforms.values()) {
+            data.members.push({
+                ref: p.data.id,
+                type: p.data.type,
+                role: 'platform',
+            });
+        }
+
+        for (const s of this.stopAreas.values()) {
+            data.members.push({
+                ref: s.data.id,
+                type: s.data.type,
+                role: 'stop_area',
+            });
+        }
+
+        for (const r of this.routes.values()) {
+            data.members.push({
+                ref: r.data.id,
+                type: r.data.type,
+                role: 'route',
+            });
+        }
+
+        for (const rm of this.routeMasters.values()) {
+            data.members.push({
+                ref: rm.data.id,
+                type: rm.data.type,
+                role: 'route_master',
+            });
+        }
+        
+        return new Relation(this.id, data);
     }
 }

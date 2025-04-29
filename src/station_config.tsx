@@ -7,7 +7,7 @@ import { TreeNode } from './tree_node';
 import { SharedContext } from './context';
 import { getByTransportTypeAsync } from './overpass_cache';
 import { Way, Node } from './element';
-import StationGroup from './stationGroup';
+import StationGroup from './station_group';
 
 const StationStyle: PathOptions = {
     color: '#3388ff',
