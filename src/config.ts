@@ -16,7 +16,12 @@ export type Config = {
     stations: StationConfig,
 };
 
-const DefaultConfig: Config = {
+export type PartialConfig = {
+    boundary?: Partial<BoundaryConfig>,
+    stations?: Partial<StationConfig>,
+};
+
+export const DefaultConfig: Config = {
     boundary: {
         included: new Set(),
         excluded: new Set(),

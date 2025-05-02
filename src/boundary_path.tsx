@@ -5,7 +5,7 @@ import { LayerGroup, Polyline, useMap } from 'react-leaflet';
 import { Id } from './id';
 import { getAsync } from './overpass_cache';
 import { Relation, WayGroup, Way, Node } from './element';
-import { Context } from './context';
+import { SharedContext, notExcluded } from './context';
 
 const EnabledStyle: PathOptions = {
     stroke: true,
@@ -30,38 +30,38 @@ const DisabledStyle: PathOptions = {
 };
 
 export function BoundaryLayer(): ReactNode {
-    const { boundary: { editing, included, excluded, notExcluded } } = useContext(Context);
+    const { boundaryEditing, boundaryIncluded, boundaryExcluded } = useContext(SharedContext);
+    const notBoundaryExcluded = notExcluded(boundaryExcluded);
     const map = useMap();
 
     useEffect(() => {
-        async function recalcBounds() {
-            if (!map || !editing) { return; }
-            
-            console.log('Updating bounds');
-    
-            const bounds = new LatLngBounds(
-                // loaded enabled relations
-                (await getAsync([...included].filter(notExcluded)) as Relation[])
-                // enabled way groups
-                .flatMap(r => r.children.filter(e => e instanceof WayGroup && notExcluded(e)))
-                // enabled ways
-                .flatMap(wg => wg.children.filter(notExcluded))
-                // nodes
-                .flatMap(w => w.children as Node[])
-                // convert to LatLngTuple
-                .map(n => [n.lat, n.lon] as LatLngTuple)
-            );
-    
+        getAsync([...boundaryIncluded].filter(notBoundaryExcluded))
+        .then(async (rs) => {
+            const waygroups = (await Promise.all(rs.map(r => (r as Relation).getWayGroupsAsync()))).flat();
+            const usedNodeIds = waygroups.flatMap(wg => {
+                if (notBoundaryExcluded(wg.id)) {
+                    return wg.children.flatMap(w => {
+                        if (notBoundaryExcluded(w.id)) {
+                            return w.childIds;
+                        } else {
+                            return [];
+                        }
+                    });
+                } else {
+                    return [];
+                }
+            });
+            const nodes = (await getAsync(usedNodeIds)) as Node[];
+            const bounds = new LatLngBounds(nodes.map(n => [n.lat, n.lon]));
             if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [0, 0] });
             }
-        }
-        recalcBounds();
-    }, [included, excluded, notExcluded, map, editing]);
+        });
+    }, [boundaryIncluded, boundaryExcluded, notBoundaryExcluded, map, boundaryEditing]);
 
-    if (editing) {
+    if (boundaryEditing) {
         return <LayerGroup>
-            {[...included].filter(notExcluded).map(id => <RelationPath key={id} id={id} />)}
+            {[...boundaryIncluded].filter(notBoundaryExcluded).map(id => <RelationPath key={id} id={id} />)}
         </LayerGroup>;
     }
 }
@@ -70,17 +70,25 @@ type RelationPathProps = {
     id: Id,
 };
 export function RelationPath({ id }: RelationPathProps): ReactNode {
-    const { boundary: { notExcluded } } = useContext(Context);
+    const { boundaryExcluded } = useContext(SharedContext);
+    const notBoundaryExcluded = notExcluded(boundaryExcluded);
     const [relation, setRelation] = useState(undefined as Relation | undefined);
 
+    console.log('[bounds] relation path', id);
     useEffect(() => {
         if (!relation || relation.id !== id) {
-            getAsync([id]).then(([r]) => setRelation(r as Relation));
+            getAsync([id]).then(async ([e]) => {
+                const r = e as Relation;
+                await getAsync(r.childIds, { request: true });
+                r.calcWayGroups();
+                setRelation(r);
+            })
+            .catch(e => console.error(e));
         }
     }, [id, relation]);
 
     return relation?.children
-        .filter(e => e instanceof WayGroup && notExcluded(e))
+        .filter(e => e instanceof WayGroup && notBoundaryExcluded(e))
         .map(wg => <WayGroupPath key={wg.id} wayGroup={wg as WayGroup} />);
 }
 
@@ -88,10 +96,12 @@ type WayGroupPathProps = {
     wayGroup: WayGroup,
 };
 export function WayGroupPath({ wayGroup }: WayGroupPathProps): ReactNode {
-    const { boundary: { notExcluded } } = useContext(Context);
+    const { boundaryExcluded } = useContext(SharedContext);
+    const notBoundaryExcluded = notExcluded(boundaryExcluded);
 
+    console.log('[bounds] way group path', wayGroup.id);
     return wayGroup.children
-        .filter(e => e instanceof Way && notExcluded(e))
+        .filter(e => e instanceof Way && notBoundaryExcluded(e))
         .map(w => <WayPath key={w.id} id={w.id} />);
 }
 
@@ -100,15 +110,21 @@ type WayPathProps = {
 };
 export function WayPath({ id }: WayPathProps): ReactNode {
     const {
-        boundary: { excluded, errors },
+        boundaryExcluded, boundaryErrors,
         hovering,
-    } = useContext(Context);
+    } = useContext(SharedContext);
     const [way, setWay] = useState(undefined as Way | undefined);
     const [renderOptions, setRenderOptions] = useState(DisabledStyle as PathOptions);
 
+    console.log('[bounds] way path', id);
+
     useEffect(() => {
         if (!way || way.id !== id) {
-            getAsync([id]).then(([w]) => setWay(w as Way));
+            getAsync([id]).then(async ([w]) => {
+                const way = w as Way;
+                await getAsync(way.childIds, { request: true });
+                setWay(w as Way);
+            });
         }
     }, [id, way]);
 
@@ -127,16 +143,16 @@ export function WayPath({ id }: WayPathProps): ReactNode {
         if (relevantIds.includes(hovering)) {
             setRenderOptions(HoveredStyle);
         }
-        else if (relevantIds.some(id => errors.has(id))) {
+        else if (relevantIds.some(id => boundaryErrors.has(id))) {
             setRenderOptions(ErrorStyle);
         }
-        else if (relevantIds.some((id) => excluded.has(id))) {
+        else if (relevantIds.some((id) => boundaryExcluded.has(id))) {
             setRenderOptions(DisabledStyle);
         }
         else {
             setRenderOptions(EnabledStyle);
         }
-    }, [way, hovering, errors, excluded]);
+    }, [way, hovering, boundaryErrors, boundaryExcluded]);
     
     if (way) {
         return <Polyline

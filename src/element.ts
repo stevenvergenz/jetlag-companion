@@ -2,7 +2,7 @@ import { LatLngTuple } from 'leaflet';
 
 import { OsmElement, OsmNode, OsmRelation, OsmWay, OsmWayGroup } from "./overpass_api";
 import { Id, pack, packFrom, unpack, reverse, unreversed } from './id';
-import { get } from './overpass_cache';
+import { get, getAsync } from './overpass_cache';
 
 export class HierarchyHelper {
     private static interests = new Map<Id, Set<Id>>();
@@ -15,34 +15,43 @@ export class HierarchyHelper {
         parent.addChildUnique(childId);
         const knownChild = get(childId);
         if (knownChild) {
+            //console.log(`[graph] ${parent.id} is interested in ${childId} (known)`);
             this.fulfillInterest(knownChild, parent);
         }
         else if (this.interests.has(childId)) {
+            //console.log(`[graph] ${parent.id} is interested in ${childId}`);
             this.interests.get(childId)!.add(parent.id);
         }
         else {
+            //console.log(`[graph] ${parent.id} is interested in ${childId}`);
             this.interests.set(childId, new Set([parent.id]));
         }
     }
 
     public static fulfillInterests(child: Element) {
-        for (const rid of this.interests.get(child.id) ?? []) {
+        const interests = this.interests.get(child.id);
+        //console.log(`[graph] fulfilling ${interests?.size ?? 0} interests for ${child.id}`);
+        for (const rid of interests ?? []) {
             const r = get(rid);
             if (r) {
                 this.fulfillInterest(child, r);
+            } else {
+                console.error(`[graph] missing parent ${rid} for ${child.id}`);
             }
         }
         this.interests.delete(child.id);
     }
 
-    private static fulfillInterest(child: Element, parent: Element) {
+    public static fulfillInterest(child: Element, parent: Element) {
+        //console.log(`[graph] fulfilling interest: ${child.id} -> ${parent.id}, ${this.interests.get(parent.id)?.size ?? 0} remaining`);
         child.parentIds.add(parent.id);
     }
 
     public static fulfillInterestRelationWay(child: Way, parent: Relation) {
+        console.log(`[graph] checking groups with ${child.id} for ${parent.id}`);
         /** All roles for the fulfilled way */
         const roles = new Set(parent.data.members
-            .filter(m => pack({ type: m.type, id: m.ref }) === child.id)
+            .filter(m => packFrom(m) === child.id)
             .map(m => m.role));
         if (roles.size === 0) {
             return;
@@ -57,10 +66,7 @@ export class HierarchyHelper {
 
             // no existing way group will take it, add a new one
             if (added.length === 0) {
-                const wg = new WayGroup(parent.id, role, child);
-                parent.wayGroups!.set(wg.id, wg);
-                parent.addChildUnique(wg.id);
-                child.parentIds.add(wg.id);
+                WayGroup.fromWays(parent.id, role, child);
                 continue;
             }
 
@@ -149,7 +155,7 @@ export abstract class Element {
         return this._data?.tags?.['name'] 
             ?? this._data?.tags?.['description'] 
             ?? this._data?.tags?.['ref'] 
-            ?? '<unspecified>';
+            ?? '<unnamed>';
     }
 
     public get complete(): boolean {
@@ -169,7 +175,7 @@ export abstract class Element {
                 HierarchyHelper.setInterest(id, this);
             }
         }
-        if (data.type === 'way') {
+        else if (data.type === 'way') {
             for (const id of data.nodes.map(n => pack({ type: 'node', id: n }))) {
                 HierarchyHelper.setInterest(id, this);
             }
@@ -201,19 +207,45 @@ export class Relation extends Element {
             return;
         }
 
+        const wayIds = this.childIds.filter(id => unpack(id).type === 'way');
+        const ways = this.children.filter(e => e instanceof Way);
+        if (ways.length !== wayIds.length) {
+            return;
+        }
+
+        console.log(`[graph] Calculating waygroups for ${this.id} with ${ways.length} ways`);
         this.wayGroups = new Map();
-        for (const w of this.children.filter(e => e instanceof Way)) {
+        for (const w of ways) {
             HierarchyHelper.fulfillInterestRelationWay(w, this);
         }
+    }
+
+    public async getWayGroupsAsync(): Promise<WayGroup[]> {
+        const wayIds = this.childIds.filter(id => unpack(id).type === 'way');
+        await getAsync(wayIds);
+        this.calcWayGroups();
+        return [...this.wayGroups!.values()];
     }
 }
 
 export class WayGroup extends Element {
     private static nextOffsets: { [id: Id]: number } = {};
 
-    public readonly role: string;
-    public startsWithNode: Id;
-    public endsWithNode: Id;
+    public static fromWays(relationId: Id, role: string, ...ways: Way[]) {
+        const offset = WayGroup.nextOffsets[relationId] ?? 0;
+        WayGroup.nextOffsets[relationId] = offset + 1;
+        const rid = unpack(relationId);
+        const wgId = pack({ type: 'wayGroup', id: rid.id, offset });
+        return new WayGroup(wgId, {
+            type: 'wayGroup',
+            id: rid.id,
+            role,
+            ways: ways.map(w => w.id),
+        });
+    }
+
+    public startsWithNode: Id = '';
+    public endsWithNode: Id = '';
 
     public get name(): string {
         return `${this.children[0].name}, ${this.role}`;
@@ -223,26 +255,33 @@ export class WayGroup extends Element {
         return this._data as OsmWayGroup;
     }
 
-    public constructor(relationId: Id, role: string, ...ways: Way[]) {
-        const offset = WayGroup.nextOffsets[relationId] ?? 0;
-        WayGroup.nextOffsets[relationId] = offset + 1;
-        const rid = unpack(relationId);
-        const wgId = pack({ type: 'wayGroup', id: rid.id, offset });
-        super(wgId, {
-            type: 'wayGroup',
-            id: rid.id,
-            index: offset,
-        });
+    public get role(): string {
+        return this.data.role;
+    }
 
-        this.parentIds.add(relationId);
-        this.role = role;
-        this.startsWithNode = '';
-        this.endsWithNode = '';
+    public constructor(id: Id, data: OsmWayGroup) {
+        super(id, data);
 
-        for (const w of ways) {
-            if (!this.add(w)) {
+        if (data.ways.length === 0) {
+            throw new Error('Requires at least one way');
+        }
+
+        const wayIds = data.ways;
+        for (const id of wayIds) {
+            const w = get(id) as Way;
+            if (!w || !this.add(w)) {
                 throw new Error('Ways do not connect');
             }
+        }
+
+        const uid = unpack(id);
+        const parentId = pack({ type: 'relation', id: uid.id });
+        this.parentIds.add(parentId);
+        const parent = get(parentId) as Relation | undefined;
+        if (parent) {
+            parent.addChildUnique(id);
+            parent.wayGroups ??= new Map();
+            parent.wayGroups.set(id, this);
         }
     }
 
@@ -279,6 +318,7 @@ export class WayGroup extends Element {
             return false;
         }
         
+        this.data.ways = this.childIds;
         return true;
     }
 }

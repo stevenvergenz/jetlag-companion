@@ -70,22 +70,19 @@ export async function generateBoundaryLoopPath(
         [...included]
         .filter(id => !excluded.has(id))
     ) as Relation[];
-    console.log('boundary relations loaded');
+
     const ws = await getAsync(
         rs.flatMap(r => r.data.members)
         .filter(m => m.type === 'way')
         .map(m => packFrom(m))
         .filter(id => !excluded.has(id))
     );
-    console.log('boundary ways loaded');
 
-    await getAsync(ws.flatMap(w => w.childIds));
-    console.log('boundary nodes loaded');
+    await getAsync(ws.flatMap(w => w ? w.childIds : []));
 
     for (const r of rs) {
         r.calcWayGroups();
     }
-    console.log('way groups calculated');
 
     return mergeRelations(rs, excluded, distanceFn);
 }
@@ -93,6 +90,13 @@ export async function generateBoundaryLoopPath(
 export function mergeRelations(
     relations: Relation[], excluded: Set<Id>, distanceFn: DistanceFn,
 ): LatLngTuple[] | undefined {
+    if (relations.length === 1) {
+        const path = calcRelationPath(relations[0], excluded, distanceFn);
+        if (path[0].every((c, i) => path[path.length - 1][i] === c)) {
+            return path;
+        }
+    }
+
     const legs = relations
         .map(r => {
             const path = calcRelationPath(r, excluded, distanceFn);
@@ -157,7 +161,7 @@ export function mergeRelations(
     while (!addedIds.has(id)) {
         const thisLeg = legs.get(id)!;
         if (thisLeg.intersections.size !== 2 || !thisLeg.intersections.has(from)) {
-            console.log(`Leg ${id} has ${thisLeg.intersections.size} intersections`);
+            console.log(`[boundary] Leg ${id} has ${thisLeg.intersections.size} intersections`);
             return undefined;
         }
 
@@ -240,7 +244,7 @@ export function calcRelationPath(relation: Relation, excluded: Set<Id>, distance
             map.set(leg.id, leg);
             return map;
         }, new Map<Id, WayLeg>());
-    console.log(`Relation ${relation.id} has ${legs.size} legs`);
+    console.log(`[boundary] Relation ${relation.id} has ${legs.size} legs`);
 
     // compare each end of each way group to every other end and match them by distance and orientation
 
@@ -276,7 +280,7 @@ export function calcRelationPath(relation: Relation, excluded: Set<Id>, distance
         }
 
         if (bestMatch.end && bestMatch.dist <= MaxDistanceMeters && bestMatch.dot <= MaxDot) {
-            console.log('match found', bestMatch.end, ref);
+            console.log('[boundary] match found', bestMatch.end, ref);
             ref.continuedBy = bestMatch.end.id;
             bestMatch.end.continuedBy = ref.id;
         }

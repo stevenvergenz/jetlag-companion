@@ -39,7 +39,9 @@ test('Way path reverse', () => {
 
 test('WayGroup path', () => {
     setup();
-    const wg = relation(1, [3, 4, 5]).children[0] as WayGroup;
+    const r = relation(1, [3, 4, 5]);
+    r.calcWayGroups();
+    const wg = r.children[3] as WayGroup;
     const path = calcWayGroupPath(wg, new Set<Id>(['w:3']));
     const realPath = nodes(4, 5, 6, 7).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
@@ -47,7 +49,9 @@ test('WayGroup path', () => {
 
 test('WayGroup path reverse', () => {
     setup();
-    const wg = relation(1, [3, 400, 5]).children[0] as WayGroup;
+    const r = relation(1, [3, 400, 5]);
+    r.calcWayGroups();
+    const wg = r.children[3] as WayGroup;
     const path = calcWayGroupPath(wg, new Set<Id>(['w:3']));
     const realPath = nodes(4, 5, 6, 7).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
@@ -56,6 +60,7 @@ test('WayGroup path reverse', () => {
 test('Relation path', () => {
     setup();
     const r = relation(1, [3, 4, 5]);
+    r.calcWayGroups();
     const path = calcRelationPath(r, new Set(), distance);
     const realPath = nodes(3, 4, 5, 6, 7).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
@@ -64,6 +69,7 @@ test('Relation path', () => {
 test('Relation path gap', () => {
     setup();
     const r = relation(1, [1, 11]);
+    r.calcWayGroups();
     const path = calcRelationPath(r, new Set(), distance);
     const realPath = nodes(1, 4, 11, 15).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
@@ -72,6 +78,7 @@ test('Relation path gap', () => {
 test('Relation path gap reverse', () => {
     setup();
     const r = relation(1, [1, 1100]);
+    r.calcWayGroups();
     const path = calcRelationPath(r, new Set(), distance);
     const realPath = nodes(1, 4, 11, 15).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
@@ -112,6 +119,9 @@ test('Merge open', () => {
     const r1 = relation(1, [600]);
     const r2 = relation(2, [4]);
     const r3 = relation(3, [7]);
+    r1.calcWayGroups();
+    r2.calcWayGroups();
+    r3.calcWayGroups();
     const loop = mergeRelations([r1, r2, r3], new Set(), distance);
     expect(loop).toBe(undefined);
 });
@@ -122,6 +132,10 @@ test('Merge closed', () => {
     const r2 = relation(2, [4]);
     const r3 = relation(3, [7]);
     const r4 = relation(4, [9]);
+    r1.calcWayGroups();
+    r2.calcWayGroups();
+    r3.calcWayGroups();
+    r4.calcWayGroups();
     const loop = mergeRelations([r1, r2, r3, r4], new Set(), distance);
     const realLoop = nodes(4, 8, 11, 12, 13, 9, 6, 5).map(n => [n.lat, n.lon]);
     expect(loop).toEqual(realLoop);

@@ -1,9 +1,7 @@
-import { Element, Node, Relation, Way } from './element';
-import { Id, packFrom, unpack, unreversed } from './id';
+import { Node, Relation, Way } from './element';
+import { Id, packFrom, unpack } from './id';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';
-
-const reqPromises = new Map<Id, Promise<Element[]>>();
 
 type OsmQueryResult = {
     version: string,
@@ -31,7 +29,8 @@ type OsmMember = {
 
 export type OsmWayGroup = OsmCommon & {
     type: 'wayGroup',
-    index: number,
+    role: string,
+    ways: Id[],
 }
 
 export type OsmWay = OsmCommon & {
@@ -47,88 +46,86 @@ export type OsmNode = OsmCommon & {
 
 export type OsmElement = OsmRelation | OsmWayGroup | OsmWay | OsmNode;
 
+export type QueryElement = Relation | Way | Node;
+export type QueryResult = Map<Id, QueryElement | undefined>;
+
 const QueryLimit = 512 * 1024 * 1024; // 512MB
 
-async function query(query: string): Promise<Element[]> {
+type QueryOptions = {
+    idOnly: boolean,
+    bbox?: string,
+};
+const DefaultQueryOptions: QueryOptions = {
+    idOnly: false,
+    bbox: undefined,
+};
+
+async function query(query: string, opts: Partial<QueryOptions> = {}): Promise<QueryResult> {
+    opts = { ...DefaultQueryOptions, ...opts };
+    const out = opts.idOnly ? 'out ids;' : 'out body;';
+    const bbox = opts.bbox ? `[bbox:${opts.bbox}]` : '';
     const res = await fetch(endpoint, {
         method: 'POST',
-        body: `[maxsize:${QueryLimit}][out:json]; ${query} out;`,
+        body: `[maxsize:${QueryLimit}][out:json]${bbox}; ${query} ${out}`,
     });
     const body = await res.json() as OsmQueryResult;
-    return body.elements.map(e => {
+
+    const result = new Map<Id, Relation | Way | Node | undefined>();
+    for (const e of body.elements) {
         const id = packFrom(e);
-        if (e.type === 'relation') {
-            return new Relation(id, e);
+        if (opts.idOnly) {
+            result.set(id, undefined);
+        }
+        else if (e.type === 'relation') {
+            result.set(id, new Relation(id, e));
         }
         else if (e.type === 'way') {
-            return new Way(id, e);
+            result.set(id, new Way(id, e));
         }
         else if (e.type === 'node') {
-            return new Node(id, e);
+            result.set(id, new Node(id, e));
         }
         else {
             throw new Error(`Unknown element type: ${e.type}`);
         }
-    });
+    }
+
+    return result;
 }
 
-function requestAsyncInternal(ids: Id[]): Promise<Element[]> {
+export async function requestAsync(ids: Id[]): Promise<QueryResult> {
+    if (ids.length === 0) {
+        return new Map();
+    }
+    
     const queryIdParts = ids.map(id => unpack(id));
+    const relationIds = queryIdParts.filter(p => p.type === 'relation').map(p => p.id);
+    const wayIds = queryIdParts.filter(p => p.type === 'way').map(p => p.id);
+    const nodeIds = queryIdParts.filter(p => p.type === 'node').map(p => p.id);
 
-    if (queryIdParts.length > 0) {
-        const relationIds = queryIdParts.filter(p => p.type === 'relation').map(p => p.id);
-        const wayIds = queryIdParts.filter(p => p.type === 'way').map(p => p.id);
-        const nodeIds = queryIdParts.filter(p => p.type === 'node').map(p => p.id);
-
-        let q = '';
-        if (relationIds.length > 0) {
-            q += `relation(id:${relationIds.join(',')});`;
-        }
-        if (wayIds.length > 0) {
-            q += `way(id:${wayIds.join(',')});`;
-        }
-        if (nodeIds.length > 0) {
-            q += `node(id:${nodeIds.join(',')});`;
-        }
-        q = `(${q});`;
-        return query(q);
+    let q = '';
+    if (relationIds.length > 0) {
+        q += `relation(id:${relationIds.join(',')});`;
     }
-    else {
-        return Promise.resolve([]);
+    if (wayIds.length > 0) {
+        q += `way(id:${wayIds.join(',')});`;
     }
-}
-
-export async function requestAsync(ids: Id[]): Promise<Element[]> {
-    ids = ids.map(id => unreversed(id)).filter(id => unpack(id).type !== 'wayGroup');
-    const queryIds = ids.filter(id => !reqPromises.has(id));
-    if (queryIds.length > 0) {
-        const p = requestAsyncInternal(queryIds);
-        for (const id of queryIds) {
-            reqPromises.set(id, p);
-        }
+    if (nodeIds.length > 0) {
+        q += `node(id:${nodeIds.join(',')});`;
     }
+    q = `(${q});`;
 
-    const items = (await Promise.all(ids.map(id => reqPromises.get(id)!)))
-        .flat()
-        .reduce((set, e) => {
-            set.set(e.id, e);
-            return set;
-        }, new Map<Id, Element>());
-
-    const ret = [] as Element[];
+    const result = await query(q);
     for (const id of ids) {
-        const e = items.get(unreversed(id));
-        if (!e) {
-            console.log('Missing element:', id);
-            continue;
+        if (!result.has(id)) {
+            result.set(id, undefined);
         }
-        ret.push(e);
     }
 
-    return ret;
+    return result;
 }
 
-export function requestTransport(poly: string): Promise<Element[]> {
+export async function requestTransport(bbox: string): Promise<Id[]> {
     // relation[public_transport=stop_area] describes a group of stops
     //   can have members "platform", "stop_position", "station", etc.
     // nw[public_transport=station] is many:many with stop_areas
@@ -136,25 +133,19 @@ export function requestTransport(poly: string): Promise<Element[]> {
     // relation[type=route] describes a route variant going to a platform
     // relation[type=route_master] describes a full route with all variants
     const q = `
-        nwr(poly:"${poly}") -> .all;
-        nw.all[public_transport=platform] -> .platforms;
-        nw.all[public_transport=station] -> .stations;
-        (
-            rel.all(bn.platforms: platform)[public_transport=stop_area];
-            rel.all(bw.platforms: platform)[public_transport=stop_area];
-        ) -> .areas;
-        (
-            rel.all(bn.platforms)[type=route];
-            rel.all(bw.platforms)[type=route];
-        ) -> .routes;
-        rel(br.routes)[type=route_master] -> .route_masters;
-        (
-            .platforms;
-            .stations;
-            .areas;
-            .routes;
-            .route_masters;
-        );
-    `;
-    return query(q);
+    (
+        way[public_transport=platform];
+        way[public_transport=station];
+    ) -> .ways;
+    (
+        node[public_transport=platform];
+        node[public_transport=station];
+        node(w.ways);
+        .ways;
+        rel[public_transport=stop_area];
+        rel[type=route];
+        rel[type=route_master];
+    );`;
+    const map = await query(q, { idOnly: true, bbox });
+    return [...map.keys()];
 }
