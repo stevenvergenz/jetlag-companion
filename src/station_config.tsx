@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useContext } from 'react';
 import { CircleMarker, LayerGroup, FeatureGroup, Polygon, Tooltip } from 'react-leaflet';
 import { PathOptions } from 'leaflet';
 
-import { Id, unpack } from './id';
+import { /* Id, */ unpack } from './id';
 import { TreeNode } from './tree_node';
 import { SharedContext } from './context';
 import { getByTransportTypeAsync } from './overpass_cache';
@@ -24,7 +24,7 @@ export function StationConfig(): ReactNode {
         busRouteThreshold,
         trainRouteThreshold,
         stations,
-        hovering, setHovering,
+        // hovering, setHovering,
         save,
     } = useContext(SharedContext);
 
@@ -61,6 +61,7 @@ export function StationConfig(): ReactNode {
         </label>;
     }
 
+    /*
     function hoverEnd(id: Id) {
         return () => {
             if (hovering === id) {
@@ -68,10 +69,11 @@ export function StationConfig(): ReactNode {
             }
         };
     }
+    */
 
     const stationElems = stations.map(s => {
         return <TreeNode id={s.id} key={s.id} initiallyOpen={true}
-            onMouseEnter={setHovering(s.id)} onMounseLeave={hoverEnd(s.id)} >
+            /* onMouseEnter={setHovering(s.id)} onMounseLeave={hoverEnd(s.id)} */ >
             {genLabel(s)}
         </TreeNode>;
     });
