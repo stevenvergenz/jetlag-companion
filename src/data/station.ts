@@ -1,4 +1,4 @@
-import { Id, getSyntheticId } from './id';
+import { Id, getSyntheticId, unpack } from './id';
 import Element from './element';
 import Relation from './relation';
 import Way from './way';
@@ -23,18 +23,43 @@ function find<T extends Element>(tag: string, es: Element[]): Map<Id, T> {
 }
 
 export default class Station extends Relation {
+    public constructor() {
+        const id = getSyntheticId('relation');
+        const uid = unpack(id);
+        super(id, { 
+            id: uid.id,
+            type: 'relation',
+            tags: {
+                jetlag_synthetic: 'station',
+            },
+            members: [],
+        });
+    }
+
     public get name(): string {
-        return this.station?.name
-            ?? this.stopAreas.values().next().value?.name
-            ?? this.platforms.values().next().value!.name;
+        return this.children[0]?.name ?? this.id;
     }
 
     public get visuals(): (Way | Node)[] {
-        return this.station ? [this.station] : [...this.platforms.values()];
+        const s = this.firstElementWithRole<Node>('station', 'node');
+        if (s) {
+            return [s];
+        }
+        else {
+            return this.allElementsWithRole<Way | Node>('platform');
+        }
     }
 
     public add(platform: Way | Node) {
-        this.platforms.set(platform.id, platform);
+        if (!this.has(platform)) {
+            return;
+        }
+
+        this.data.members.push({
+            ref: platform.data.id,
+            type: platform.data.type,
+            role: 'platform',
+        });
 
         this.stopAreas = findUp<Relation>('stop_area', this.platforms);
         
