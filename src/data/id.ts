@@ -69,3 +69,14 @@ export function isReversed(id: Id): boolean {
 export function unreversed(id: Id): Id {
     return isReversed(id) ? id.slice(1) : id;
 }
+
+let nextSyntheticId = -1;
+
+export function getSyntheticId(type: OsmElementType): Id {
+    return pack({ id: nextSyntheticId--, type });
+}
+
+export function updateSyntheticId(id: Id) {
+    const unpacked = unpack(id);
+    nextSyntheticId = Math.min(nextSyntheticId, unpacked.id - 1);
+}

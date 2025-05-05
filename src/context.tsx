@@ -4,7 +4,7 @@ import { LatLngTuple } from 'leaflet';
 import { Id } from './id';
 import { Element } from './element';
 import { load, save, PartialConfig } from './config';
-import StationGroup from './station_group';
+import StationGroup from './data/station';
 
 type ContextContent = {
     boundaryIncluded: Set<Id>,

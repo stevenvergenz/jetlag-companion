@@ -1,4 +1,6 @@
-import { Node, Relation, Way } from './element';
+import Node from './node';
+import Relation from './relation';
+import Way from './way';
 import { Id, packFrom, unpack } from './id';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';
@@ -9,7 +11,7 @@ type OsmQueryResult = {
     elements: OsmElement[],
 };
 
-export type OsmElementType = 'relation' | 'way' | 'node' | 'wayGroup';
+export type OsmElementType = 'relation' | 'way' | 'node';
 type OsmCommon = {
     type: OsmElementType,
     id: number,
@@ -27,12 +29,6 @@ type OsmMember = {
     role: string,
 };
 
-export type OsmWayGroup = OsmCommon & {
-    type: 'wayGroup',
-    role: string,
-    ways: Id[],
-}
-
 export type OsmWay = OsmCommon & {
     type: 'way',
     nodes: number[],
@@ -44,7 +40,7 @@ export type OsmNode = OsmCommon & {
     lon: number,
 };
 
-export type OsmElement = OsmRelation | OsmWayGroup | OsmWay | OsmNode;
+export type OsmElement = OsmRelation | OsmWay | OsmNode;
 
 export type QueryElement = Relation | Way | Node;
 export type QueryResult = Map<Id, QueryElement | undefined>;
@@ -84,9 +80,6 @@ async function query(query: string, opts: Partial<QueryOptions> = {}): Promise<Q
         }
         else if (e.type === 'node') {
             result.set(id, new Node(id, e));
-        }
-        else {
-            throw new Error(`Unknown element type: ${e.type}`);
         }
     }
 

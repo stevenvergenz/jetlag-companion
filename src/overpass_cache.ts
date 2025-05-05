@@ -4,7 +4,7 @@ import { Feature } from 'geojson';
 
 import { Id, pack, unpack, unreversed } from './id';
 import { Element, Node, Relation, Way } from './element';
-import { QueryElement, QueryResult, OsmElement, OsmElementType, requestAsync, requestTransport } from './overpass_api';
+import { QueryElement, QueryResult, OsmElement, OsmElementType, requestAsync, requestTransport } from './data/overpass_api';
 
 type TransportType = 'platform' | 'station' | 'stop_area' | 'route' | 'route_master' | undefined;
 
