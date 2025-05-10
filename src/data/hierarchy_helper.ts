@@ -1,50 +1,10 @@
 import { Id, packFrom, reverse, unreversed } from './id';
-import Element from './element';
+import { Element } from './element';
 import Relation from './relation';
 import Way from './way';
 
 export default class HierarchyHelper {
     private static interests = new Map<Id, Set<Id>>();
-
-    public static reset() {
-        this.interests = new Map();
-    }
-
-    public static setInterest(childId: Id, parent: Element) {
-        parent.addChildUnique(childId);
-        const knownChild = get(childId);
-        if (knownChild) {
-            //console.log(`[graph] ${parent.id} is interested in ${childId} (known)`);
-            this.fulfillInterest(knownChild, parent);
-        }
-        else if (this.interests.has(childId)) {
-            //console.log(`[graph] ${parent.id} is interested in ${childId}`);
-            this.interests.get(childId)!.add(parent.id);
-        }
-        else {
-            //console.log(`[graph] ${parent.id} is interested in ${childId}`);
-            this.interests.set(childId, new Set([parent.id]));
-        }
-    }
-
-    public static fulfillInterests(child: Element) {
-        const interests = this.interests.get(child.id);
-        //console.log(`[graph] fulfilling ${interests?.size ?? 0} interests for ${child.id}`);
-        for (const rid of interests ?? []) {
-            const r = get(rid);
-            if (r) {
-                this.fulfillInterest(child, r);
-            } else {
-                console.error(`[graph] missing parent ${rid} for ${child.id}`);
-            }
-        }
-        this.interests.delete(child.id);
-    }
-
-    public static fulfillInterest(child: Element, parent: Element) {
-        //console.log(`[graph] fulfilling interest: ${child.id} -> ${parent.id}, ${this.interests.get(parent.id)?.size ?? 0} remaining`);
-        child.parentIds.add(parent.id);
-    }
 
     public static fulfillInterestRelationWay(child: Way, parent: Relation) {
         console.log(`[graph] checking groups with ${child.id} for ${parent.id}`);

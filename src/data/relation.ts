@@ -1,4 +1,4 @@
-import Element from './element';
+import { Element, ElementRef } from './element';
 import Way from './way';
 import Node from './node';
 import { OsmElementType, OsmRelation } from './overpass_api';
@@ -6,35 +6,32 @@ import { Id, packFrom } from './id';
 import { get } from '../overpass_cache';
 
 export default class Relation extends Element {
-    private _indexLookup = new Map<Id, number>();
-
     public constructor(id: Id, data: OsmRelation) {
         super(id, data);
+
+        for (const m of data.members) {
+            const childRef: ElementRef = {
+                id: packFrom(m),
+                role: m.role,
+            };
+
+            this.children.push(childRef);
+        }
+
+        this.processInterests();
     }
 
     public get data() {
         return this._data as OsmRelation;
     }
 
-    public indexOf(id: Id): number {
-        const index = this.data.members.findIndex(m => packFrom(m) === id);
-        if (index >= 0) {
-            this._indexLookup.set(id, index);
-        }
-        return index;
-    }
-
     public has(id: Id): boolean {
-        return this.indexOf(id) >= 0;
+        return this.children.findIndex(ref => ref.id === id) >= 0;
     }
 
     public roleOf(id: Id): string | undefined {
-        if (this.has(id)) {
-            return this.data.members[this._indexLookup.get(id)!].role;
-        }
-        else {
-            return undefined;
-        }
+        const ref = this.children.find(ref => ref.id === id);
+        return ref?.role;
     }
 
     public firstIdWithRole(role: string, type?: OsmElementType): Id | undefined {

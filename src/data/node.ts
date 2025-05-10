@@ -1,10 +1,11 @@
-import Element from './element';
+import { Element } from './element';
 import { OsmNode } from './overpass_api';
 import { Id } from './id';
 
 export default class Node extends Element {
     public constructor(id: Id, data: OsmNode) {
         super(id, data);
+        this.processInterests();
     }
 
     public get data() {

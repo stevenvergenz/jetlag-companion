@@ -1,28 +1,12 @@
 import { Id, getSyntheticId, unpack } from './id';
-import Element from './element';
+import { Element, TransportType } from './element';
 import Relation from './relation';
 import Way from './way';
 import Node from './node';
-import { OsmRelation } from './overpass_api';
 
-function findUp<T extends Element>(tag: string, es: Map<Id, Element>): Map<Id, T> {
-    return find(tag, [...es.values()].flatMap(e => e.parents));
-}
+export class Station extends Relation {
+    private _typeRanges = [0, 0, 0, 0, 0];
 
-function findDown<T extends Element>(tag: string, es: Map<Id, Element>): Map<Id, T> {
-    return find(tag, [...es.values()].flatMap(e => e.children));
-}
-
-function find<T extends Element>(tag: string, es: Element[]): Map<Id, T> {
-    return es
-        .filter(e => [e.data.tags?.public_transport, e.data.tags?.type].includes(tag))
-        .reduce((map, e) => {
-            map.set(e.id, e as T);
-            return map;
-        }, new Map<Id, T>());
-}
-
-export default class Station extends Relation {
     public constructor() {
         const id = getSyntheticId('relation');
         const uid = unpack(id);
@@ -36,10 +20,6 @@ export default class Station extends Relation {
         });
     }
 
-    public get name(): string {
-        return this.children[0]?.name ?? this.id;
-    }
-
     public get visuals(): (Way | Node)[] {
         const s = this.firstElementWithRole<Node>('station', 'node');
         if (s) {
@@ -51,19 +31,72 @@ export default class Station extends Relation {
     }
 
     public add(platform: Way | Node) {
-        if (!this.has(platform)) {
+        // add the platform
+
+        if (this.has(platform.id)) {
             return;
         }
 
-        this.data.members.push({
-            ref: platform.data.id,
-            type: platform.data.type,
+        let uid = unpack(platform.id);
+        this.data.members.splice(this.platformEnd++, 0, {
+            ref: uid.id,
+            type: uid.type,
             role: 'platform',
         });
 
-        this.stopAreas = findUp<Relation>('stop_area', this.platforms);
-        
-        this.station = [...this.stopAreas.values()]
+        // add any stop areas
+
+        const stopAreas = platform.parents.flatMap(ref => {
+            if (!this.has(ref.id)
+                && ref.id === platform.id
+                && ref.element?.transportType === TransportType.StopArea) {
+                return [ref.element];
+            } else {
+                return [];
+            }
+        });
+
+        if (stopAreas.length === 0) {
+            return;
+        }
+
+        for (const stopArea of stopAreas) {
+            uid = unpack(stopArea.id);
+            this.data.members.splice(this.stopAreaEnd++, 0, {
+                ref: uid.id,
+                type: uid.type,
+                role: 'stop_area',
+            });
+        }
+
+
+        // add any stations
+
+        const stations = stopAreas.flatMap(sa => {
+            return sa.children.flatMap(ref => {
+                if (!this.has(ref.id)
+                    && ref.element?.transportType === TransportType.Station) {
+                    return [ref.element];
+                } else {
+                    return [];
+                }
+            });
+        })
+
+        if (stations.length === 0) {
+            return;
+        }
+
+        for (const station of stations) {
+            uid = unpack(station.id);
+            this.data.members.splice(this.stationEnd++, 0, {
+                ref: uid.id,
+                type: uid.type,
+                role: 'station',
+            });
+        }
+
+        /*this.station = stopAreas
             .flatMap(s => s.children)
             .find(c => 
                 (c instanceof Way || c instanceof Node) 
@@ -81,62 +114,60 @@ export default class Station extends Relation {
 
         this.routes = findUp<Relation>('route', this.platforms);
 
-        this.routeMasters = findUp<Relation>('route_master', this.routes);
+        this.routeMasters = findUp<Relation>('route_master', this.routes);*/
     }
 
-    public has(element: Element): boolean {
-        return this.platforms.has(element.id)
-            || this.stopAreas.has(element.id)
-            || this.station?.id === element.id;
+    private extendRange(index: number) {
+        this._typeRanges = [
+            ...this._typeRanges.slice(0, index),
+            ...this._typeRanges.slice(index).map(n => n + 1),
+        ];
     }
 
-    public save(): Relation {
-        const data: OsmRelation = {
-            id: 252525,
-            type: 'relation',
-            members: [],
-        };
+    private get platformStart() {
+        return 0;
+    }
+    private get platformEnd() {
+        return this._typeRanges[0];
+    }
+    private set platformEnd(_: number) {
+        this.extendRange(0);
+    }
 
-        if (this.station) {
-            data.members.push({
-                ref: this.station.data.id,
-                type: this.station.data.type,
-                role: 'station',
-            });
-        }
+    private get stopAreaStart() {
+        return this.platformEnd;
+    }
+    private get stopAreaEnd() {
+        return this._typeRanges[1];
+    }
+    private set stopAreaEnd(_: number) {
+        this.extendRange(1);
+    }
 
-        for (const p of this.platforms.values()) {
-            data.members.push({
-                ref: p.data.id,
-                type: p.data.type,
-                role: 'platform',
-            });
-        }
+    private get stationStart() {
+        return this.stopAreaEnd;
+    }
+    private get stationEnd() {
+        return this._typeRanges[2];
+    }
+    private set stationEnd(_: number) {
+        this.extendRange(2);
+    }
 
-        for (const s of this.stopAreas.values()) {
-            data.members.push({
-                ref: s.data.id,
-                type: s.data.type,
-                role: 'stop_area',
-            });
-        }
+    private get routeStart() {
+        return this.stationEnd;
+    }
+    private get routeEnd() {
+        return this._typeRanges[3];
+    }
+    private set routeEnd(_: number) {
+        this.extendRange(3);
+    }
 
-        for (const r of this.routes.values()) {
-            data.members.push({
-                ref: r.data.id,
-                type: r.data.type,
-                role: 'route',
-            });
-        }
-
-        for (const rm of this.routeMasters.values()) {
-            data.members.push({
-                ref: rm.data.id,
-                type: rm.data.type,
-                role: 'route_master',
-            });
-        }
-        
-        return new Relation(this.id, data);
+    private get routeMasterStart() {
+        return this.routeEnd;
+    }
+    private get routeMasterEnd() {
+        return this._typeRanges.length;
     }
 }
