@@ -59,6 +59,20 @@ export abstract class Element {
         this._data = data;
     }
 
+    protected addChild(child: Element, role?: string) {
+        if (this.children.find(ref => ref.id === child.id)) {
+            return;
+        }
+
+        const childRef: ElementRef = {
+            id: child.id,
+            role,
+            element: child,
+        };
+
+        this.children.push(childRef);
+    }
+
     protected processInterests() {
         // populate child references
         for (const childRef of this.children) {

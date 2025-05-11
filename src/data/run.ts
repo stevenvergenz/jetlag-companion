@@ -1,13 +1,26 @@
 import Relation from './relation';
 import Way from './way';
-import { Id } from './id';
+import { Id, getSyntheticId, unpack } from './id';
 
 export default class Run extends Relation {
-    
+    public constructor() {
+        const id = getSyntheticId('relation');
+        const uid = unpack(id);
+        super(id, {
+            id: uid.id,
+            type: 'relation',
+            tags: {
+                jetlag_synthetic: 'run',
+            },
+            members: [],
+        });
+    }
+
     public add(way: Way): boolean {
-        const firstNode = way.childIds[0];
-        const lastNode = way.childIds[way.childIds.length - 1];
-        if (this.childIds.length === 0) {
+        const firstNode = way.children[0].id;
+        const lastNode = way.children[way.children.length - 1].id;
+
+        if (this.children.length === 0) {
             this.childIds.push(way.id);
             this.startsWithNode = firstNode;
             this.endsWithNode = lastNode;

@@ -1,10 +1,15 @@
-import { Id, getSyntheticId, unpack } from './id';
-import { Element, TransportType } from './element';
+import { getSyntheticId, unpack } from './id';
+import { TransportType } from './element';
 import Relation from './relation';
 import Way from './way';
 import Node from './node';
+import { OsmElement } from './overpass_api';
 
 export class Station extends Relation {
+    public static isStation(e: OsmElement): boolean {
+        return e.type === 'relation' && e.tags?.jetlag_synthetic === 'station';
+    }
+
     private _typeRanges = [0, 0, 0, 0, 0];
 
     public constructor() {
@@ -44,11 +49,10 @@ export class Station extends Relation {
             role: 'platform',
         });
 
-        // add any stop areas
+        // add any stop areas (above platforms)
 
-        const stopAreas = platform.parents.flatMap(ref => {
+        const directStopAreas = platform.parents.flatMap(ref => {
             if (!this.has(ref.id)
-                && ref.id === platform.id
                 && ref.element?.transportType === TransportType.StopArea) {
                 return [ref.element];
             } else {
@@ -56,11 +60,11 @@ export class Station extends Relation {
             }
         });
 
-        if (stopAreas.length === 0) {
+        if (directStopAreas.length === 0) {
             return;
         }
 
-        for (const stopArea of stopAreas) {
+        for (const stopArea of directStopAreas) {
             uid = unpack(stopArea.id);
             this.data.members.splice(this.stopAreaEnd++, 0, {
                 ref: uid.id,
@@ -70,9 +74,9 @@ export class Station extends Relation {
         }
 
 
-        // add any stations
+        // add any stations (below stop areas)
 
-        const stations = stopAreas.flatMap(sa => {
+        const stations = directStopAreas.flatMap(sa => {
             return sa.children.flatMap(ref => {
                 if (!this.has(ref.id)
                     && ref.element?.transportType === TransportType.Station) {
@@ -81,7 +85,7 @@ export class Station extends Relation {
                     return [];
                 }
             });
-        })
+        });
 
         if (stations.length === 0) {
             return;
@@ -96,25 +100,109 @@ export class Station extends Relation {
             });
         }
 
-        /*this.station = stopAreas
-            .flatMap(s => s.children)
-            .find(c => 
-                (c instanceof Way || c instanceof Node) 
-                && c.data.tags?.public_transport === 'station'
-            ) as Way | Node | undefined;
+        // add any additional stop areas (above stations)
 
-        if (this.station) {
-            this.stopAreas = findUp<Relation>('stop_area',
-                new Map<Id, Element>([[this.station.id, this.station]]));
+        const indirectStopAreas = stations.flatMap(s => {
+            return s.parents.flatMap(ref => {
+                if (!this.has(ref.id)
+                    && ref.element?.transportType === TransportType.StopArea) {
+                    return [ref.element];
+                } else {
+                    return [];
+                }
+            });
+        });
+
+        if (indirectStopAreas.length === 0) {
+            return;
         }
 
-        if (this.stopAreas.size > 0) {
-            this.platforms = findDown('platform', this.stopAreas);
+        for (const stopArea of indirectStopAreas) {
+            uid = unpack(stopArea.id);
+            this.data.members.splice(this.stopAreaEnd++, 0, {
+                ref: uid.id,
+                type: uid.type,
+                role: 'stop_area',
+            });
         }
 
-        this.routes = findUp<Relation>('route', this.platforms);
+        // add any additional platforms (below stop areas)
 
-        this.routeMasters = findUp<Relation>('route_master', this.routes);*/
+        const indirectPlatforms = indirectStopAreas.flatMap(sa => {
+            return sa.children.flatMap(ref => {
+                if (!this.has(ref.id)
+                    && ref.element?.transportType === TransportType.Platform) {
+                    return [ref.element];
+                } else {
+                    return [];
+                }
+            });
+        });
+
+        if (indirectPlatforms.length === 0) {
+            return;
+        }
+
+        for (const ip of indirectPlatforms) {
+            uid = unpack(ip.id);
+            this.data.members.splice(this.platformEnd++, 0, {
+                ref: uid.id,
+                type: uid.type,
+                role: 'platform',
+            });
+        }
+
+        // routes
+
+        const routes = [platform, ...indirectPlatforms].flatMap(p => {
+            return p.parents.flatMap(ref => {
+                if (!this.has(ref.id)
+                    && ref.element?.transportType === TransportType.Route) {
+                    return [ref.element];
+                } else {
+                    return [];
+                }
+            });
+        });
+
+        if (routes.length === 0) {
+            return;
+        }
+
+        for (const route of routes) {
+            uid = unpack(route.id);
+            this.data.members.splice(this.routeEnd++, 0, {
+                ref: uid.id,
+                type: uid.type,
+                role: 'route',
+            });
+        }
+
+        // route masters
+
+        const masters = routes.flatMap(r => {
+            return r.parents.flatMap(ref => {
+                if (!this.has(ref.id)
+                    && ref.element?.transportType === TransportType.RouteMaster) {
+                    return [ref.element];
+                } else {
+                    return [];
+                }
+            });
+        });
+
+        if (masters.length === 0) {
+            return;
+        }
+
+        for (const master of masters) {
+            uid = unpack(master.id);
+            this.data.members.push({
+                ref: uid.id,
+                type: uid.type,
+                role: 'route_master',
+            });
+        }
     }
 
     private extendRange(index: number) {
@@ -124,9 +212,6 @@ export class Station extends Relation {
         ];
     }
 
-    private get platformStart() {
-        return 0;
-    }
     private get platformEnd() {
         return this._typeRanges[0];
     }
@@ -134,9 +219,6 @@ export class Station extends Relation {
         this.extendRange(0);
     }
 
-    private get stopAreaStart() {
-        return this.platformEnd;
-    }
     private get stopAreaEnd() {
         return this._typeRanges[1];
     }
@@ -144,9 +226,6 @@ export class Station extends Relation {
         this.extendRange(1);
     }
 
-    private get stationStart() {
-        return this.stopAreaEnd;
-    }
     private get stationEnd() {
         return this._typeRanges[2];
     }
@@ -154,20 +233,10 @@ export class Station extends Relation {
         this.extendRange(2);
     }
 
-    private get routeStart() {
-        return this.stationEnd;
-    }
     private get routeEnd() {
         return this._typeRanges[3];
     }
     private set routeEnd(_: number) {
         this.extendRange(3);
-    }
-
-    private get routeMasterStart() {
-        return this.routeEnd;
-    }
-    private get routeMasterEnd() {
-        return this._typeRanges.length;
     }
 }
