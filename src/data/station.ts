@@ -42,12 +42,7 @@ export class Station extends Relation {
             return;
         }
 
-        let uid = unpack(platform.id);
-        this.data.members.splice(this.platformEnd++, 0, {
-            ref: uid.id,
-            type: uid.type,
-            role: 'platform',
-        });
+        this.addChild(platform, 'platform', this.platformEnd++);
 
         // add any stop areas (above platforms)
 
@@ -65,14 +60,8 @@ export class Station extends Relation {
         }
 
         for (const stopArea of directStopAreas) {
-            uid = unpack(stopArea.id);
-            this.data.members.splice(this.stopAreaEnd++, 0, {
-                ref: uid.id,
-                type: uid.type,
-                role: 'stop_area',
-            });
+            this.addChild(stopArea, 'stop_area', this.stopAreaEnd++);
         }
-
 
         // add any stations (below stop areas)
 
@@ -92,12 +81,7 @@ export class Station extends Relation {
         }
 
         for (const station of stations) {
-            uid = unpack(station.id);
-            this.data.members.splice(this.stationEnd++, 0, {
-                ref: uid.id,
-                type: uid.type,
-                role: 'station',
-            });
+            this.addChild(station, 'station', this.stationEnd++);
         }
 
         // add any additional stop areas (above stations)
@@ -118,12 +102,7 @@ export class Station extends Relation {
         }
 
         for (const stopArea of indirectStopAreas) {
-            uid = unpack(stopArea.id);
-            this.data.members.splice(this.stopAreaEnd++, 0, {
-                ref: uid.id,
-                type: uid.type,
-                role: 'stop_area',
-            });
+            this.addChild(stopArea, 'stop_area', this.stopAreaEnd++);
         }
 
         // add any additional platforms (below stop areas)
@@ -144,12 +123,7 @@ export class Station extends Relation {
         }
 
         for (const ip of indirectPlatforms) {
-            uid = unpack(ip.id);
-            this.data.members.splice(this.platformEnd++, 0, {
-                ref: uid.id,
-                type: uid.type,
-                role: 'platform',
-            });
+            this.addChild(ip, 'platform', this.platformEnd++);
         }
 
         // routes
@@ -170,12 +144,7 @@ export class Station extends Relation {
         }
 
         for (const route of routes) {
-            uid = unpack(route.id);
-            this.data.members.splice(this.routeEnd++, 0, {
-                ref: uid.id,
-                type: uid.type,
-                role: 'route',
-            });
+            this.addChild(route, 'route', this.routeEnd++);
         }
 
         // route masters
@@ -196,12 +165,7 @@ export class Station extends Relation {
         }
 
         for (const master of masters) {
-            uid = unpack(master.id);
-            this.data.members.push({
-                ref: uid.id,
-                type: uid.type,
-                role: 'route_master',
-            });
+            this.addChild(master, 'route_master');
         }
     }
 

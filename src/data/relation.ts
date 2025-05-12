@@ -2,10 +2,14 @@ import { Element, ElementRef } from './element';
 import Way from './way';
 import Node from './node';
 import { OsmElementType, OsmRelation } from './overpass_api';
-import { Id, packFrom } from './id';
+import { Id, packFrom, unpack } from './id';
 import { get } from '../overpass_cache';
 
 export default class Relation extends Element {
+    public static isRelation(e: Element): boolean {
+        return e.data.type === 'relation';
+    }
+    
     public constructor(id: Id, data: OsmRelation) {
         super(id, data);
 
@@ -80,5 +84,24 @@ export default class Relation extends Element {
 
     public allNodesWithRole(role: string): Node[] {
         return this.allElementsWithRole<Node>(role, 'node');
+    }
+
+    protected addChild(child: Element, role?: string, index?: number) {
+        if (this.children.find(ref => ref.id === child.id && (!role || ref.role === role))) {
+            return;
+        }
+
+        if (index === undefined) {
+            index = this.children.length;
+        }
+
+        const uid = unpack(child.id);
+        this.data.members.splice(index, 0, {
+            ref: uid.id,
+            type: uid.type,
+            role: role ?? '',
+        });
+
+        super.addChild(child, role, index);
     }
 }

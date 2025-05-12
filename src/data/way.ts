@@ -5,6 +5,10 @@ import Node from './node';
 import { LatLngTuple } from 'leaflet';
 
 export default class Way extends Element {
+    public static isWay(e: Element): boolean {
+        return e.data.type === 'way';
+    }
+
     public constructor(id: Id, data: OsmWay) {
         super(id, data);
 
@@ -44,5 +48,19 @@ export default class Way extends Element {
             (Math.max(...lats) + Math.min(...lats)) / 2,
             (Math.max(...lons) + Math.min(...lons)) / 2,
         ] as LatLngTuple;
+    }
+
+    protected addChild(child: Element, role?: string, index?: number) {
+        if (index === undefined) {
+            index = this.children.length;
+        }
+
+        if (!Node.isNode(child) || index > this.children.length) {
+            return;
+        }
+
+        this.data.nodes.splice(index, 0, child.data.id);
+
+        super.addChild(child, role, index);
     }
 }

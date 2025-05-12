@@ -59,18 +59,32 @@ export abstract class Element {
         this._data = data;
     }
 
-    protected addChild(child: Element, role?: string) {
-        if (this.children.find(ref => ref.id === child.id)) {
+    protected addChild(child: Element, role?: string, index?: number) {
+        if (index === undefined) {
+            index = this.children.length;
+        }
+
+        if (index > this.children.length
+            || this.children.find(ref => 
+                ref.id === child.id && (!role || ref.role === role))
+        ) {
             return;
         }
 
-        const childRef: ElementRef = {
+        this.children.splice(index, 0, {
             id: child.id,
             role,
             element: child,
-        };
+        });
 
-        this.children.push(childRef);
+        const backRef = child.parents.find(ref => ref.id === this.id);
+        if (!backRef || backRef.role !== role) {
+            child.parents.push({
+                id: this.id,
+                role,
+                element: this,
+            });
+        }
     }
 
     protected processInterests() {
