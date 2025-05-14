@@ -9,10 +9,9 @@ export type IdUnpacked = {
     reverse?: boolean,
 };
 
-const idRegex = /^(-)?(r|wg|w|n):(\d+)(?:\/(\d+))?$/;
+const idRegex = /^(r|w|n):(\d+)(?:\/(\d+))?$/;
 const typePrefixMap = new Map([
     ['r', 'relation' as OsmElementType],
-    ['wg', 'wayGroup' as OsmElementType],
     ['w', 'way' as OsmElementType],
     ['n', 'node' as OsmElementType],
 ]);

@@ -18,8 +18,4 @@ export default class Node extends Element {
 
     public get lat() { return this.data.lat; }
     public get lon() { return this.data.lon; }
-
-    protected addChild(child: Element, role?: string, index?: number) {
-        throw new Error('Nodes cannot have children');
-    }
 }

@@ -9,7 +9,7 @@ export default class Relation extends Element {
     public static isRelation(e: Element): boolean {
         return e.data.type === 'relation';
     }
-    
+
     public constructor(id: Id, data: OsmRelation) {
         super(id, data);
 

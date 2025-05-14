@@ -35,11 +35,11 @@ export class Station extends Relation {
         }
     }
 
-    public add(platform: Way | Node) {
+    public tryAdd(platform: Way | Node): boolean {
         // add the platform
 
         if (this.has(platform.id)) {
-            return;
+            return false;
         }
 
         this.addChild(platform, 'platform', this.platformEnd++);
@@ -56,7 +56,7 @@ export class Station extends Relation {
         });
 
         if (directStopAreas.length === 0) {
-            return;
+            return true;
         }
 
         for (const stopArea of directStopAreas) {
@@ -77,7 +77,7 @@ export class Station extends Relation {
         });
 
         if (stations.length === 0) {
-            return;
+            return true;
         }
 
         for (const station of stations) {
@@ -98,7 +98,7 @@ export class Station extends Relation {
         });
 
         if (indirectStopAreas.length === 0) {
-            return;
+            return true;
         }
 
         for (const stopArea of indirectStopAreas) {
@@ -119,7 +119,7 @@ export class Station extends Relation {
         });
 
         if (indirectPlatforms.length === 0) {
-            return;
+            return true;
         }
 
         for (const ip of indirectPlatforms) {
@@ -140,7 +140,7 @@ export class Station extends Relation {
         });
 
         if (routes.length === 0) {
-            return;
+            return true;
         }
 
         for (const route of routes) {
@@ -161,12 +161,14 @@ export class Station extends Relation {
         });
 
         if (masters.length === 0) {
-            return;
+            return true;
         }
 
         for (const master of masters) {
             this.addChild(master, 'route_master');
         }
+
+        return true;
     }
 
     private extendRange(index: number) {

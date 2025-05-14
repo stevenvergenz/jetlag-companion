@@ -1,8 +1,13 @@
 import Relation from './relation';
 import Way from './way';
-import { Id, getSyntheticId, unpack } from './id';
+import { getSyntheticId, unpack } from './id';
+import { OsmElement } from './overpass_api';
 
 export default class Run extends Relation {
+    public static isRun(e: OsmElement): boolean {
+        return e.type === 'relation' && e.tags?.jetlag_synthetic === 'run';
+    }
+
     public constructor() {
         const id = getSyntheticId('relation');
         const uid = unpack(id);
@@ -16,100 +21,132 @@ export default class Run extends Relation {
         });
     }
 
-    public add(way: Way): boolean {
-        const firstNode = way.children[0].id;
-        const lastNode = way.children[way.children.length - 1].id;
+    public tryAdd(way: Way): boolean {
+        if (!way.firstChild || !way.lastChild
+            || !this.firstChild?.firstChild || !this.lastChild?.lastChild) {
+            return false;
+        }
+
+        const wayFirstNode = way.firstChild.id;
+        const wayLastNode = way.lastChild.id;
+        const runFirstNode = this.firstChild.firstChild.id;
+        const runLastNode = this.lastChild.lastChild.id;
 
         if (this.children.length === 0) {
-            this.childIds.push(way.id);
-            this.startsWithNode = firstNode;
-            this.endsWithNode = lastNode;
-            way.parentIds.add(this.id);
+            this.addChild(way);
         }
-        else if (this.endsWithNode === firstNode) {
-            this.childIds.push(way.id);
-            this.endsWithNode = lastNode;
-            way.parentIds.add(this.id);
+        else if (runLastNode === wayFirstNode) {
+            this.addChild(way);
         }
-        else if (this.startsWithNode === lastNode) {
-            this.childIds.unshift(way.id);
-            this.startsWithNode = firstNode;
-            way.parentIds.add(this.id);
+        else if (runFirstNode === wayLastNode) {
+            this.addChild(way, undefined, 0);
         }
-        else if (this.startsWithNode === firstNode) {
-            this.childIds.unshift(reverse(way.id));
-            this.startsWithNode = lastNode;
-            way.parentIds.add(this.id);
+        else if (runFirstNode === wayFirstNode) {
+            // TODO: reverse way rendering
+            this.addChild(way, 'reversed', 0);
         }
-        else if (this.endsWithNode === lastNode) {
-            this.childIds.push(reverse(way.id));
-            this.endsWithNode = firstNode;
-            way.parentIds.add(this.id);
+        else if (runLastNode === wayLastNode) {
+            // TODO: reverse way rendering
+            this.addChild(way, 'reversed');
         }
         else {
             return false;
         }
-        
-        this.data.ways = this.childIds;
+
         return true;
     }
-}
 
 
-class WayGroup extends Element {
-    private static nextOffsets: { [id: Id]: number } = {};
+    public static generateFromRelation(relation: Relation): Run[] {
+        const runs: Run[] = [];
 
-    public static fromWays(relationId: Id, role: string, ...ways: Way[]) {
-        const offset = WayGroup.nextOffsets[relationId] ?? 0;
-        WayGroup.nextOffsets[relationId] = offset + 1;
-        const rid = unpack(relationId);
-        const wgId = pack({ type: 'wayGroup', id: rid.id, offset });
-        return new WayGroup(wgId, {
-            type: 'wayGroup',
-            id: rid.id,
-            role,
-            ways: ways.map(w => w.id),
-        });
-    }
-
-    public startsWithNode: Id = '';
-    public endsWithNode: Id = '';
-
-    public get name(): string {
-        return `${this.children[0].name}, ${this.role}`;
-    }
-
-    public get data(): OsmWayGroup {
-        return this._data as OsmWayGroup;
-    }
-
-    public get role(): string {
-        return this.data.role;
-    }
-
-    public constructor(id: Id, data: OsmWayGroup) {
-        super(id, data);
-
-        if (data.ways.length === 0) {
-            throw new Error('Requires at least one way');
+        const ways = relation.children.flatMap(ref => ref.element && Way.isWay(ref.element) ? [ref.element] : []);
+        for (const way of ways) {
+            
         }
 
-        const wayIds = data.ways;
-        for (const id of wayIds) {
-            const w = get(id) as Way;
-            if (!w || !this.add(w)) {
-                throw new Error('Ways do not connect');
+        return runs;
+        /*
+        public static fulfillInterestRelationWay(child: Way, parent: Relation) {
+            console.log(`[graph] checking groups with ${child.id} for ${parent.id}`);
+            // All roles for the fulfilled way
+            const roles = new Set(parent.data.members
+                .filter(m => packFrom(m) === child.id)
+                .map(m => m.role));
+            if (roles.size === 0) {
+                return;
+            }
+
+            const wayEnds = [child.childIds[0], child.childIds[child.childIds.length - 1]];
+
+            for (const role of roles) {
+                // The list of known way groups that successfully added the fulfilled way 
+                const added = [...parent.wayGroups!.values()]
+                    .filter(e => e.role === role && e.add(child));
+
+                // no existing way group will take it, add a new one
+                if (added.length === 0) {
+                    WayGroup.fromWays(parent.id, role, child);
+                    continue;
+                }
+
+                // check if the new way bridged two existing way groups
+                for (let i = 0; i < added.length - 1; i++) {
+                    // The older of two way groups
+                    const senior = added[i];
+                    const seniorEndWays = [
+                        unreversed(senior.childIds[0]), 
+                        unreversed(senior.childIds[senior.childIds.length - 1]),
+                    ];
+                    const junior = added.slice(i+1).find(wg => {
+                        return seniorEndWays.includes(unreversed(wg.childIds[0]))
+                            || seniorEndWays.includes(unreversed(wg.childIds[wg.childIds.length - 1]));
+                    });
+
+                    if (!junior) {
+                        continue;
+                    }
+
+                    const seniorStart = wayEnds.indexOf(senior.startsWithNode);
+                    const seniorEnd = wayEnds.indexOf(senior.endsWithNode);
+                    const juniorStart = wayEnds.indexOf(junior.startsWithNode);
+                    const juniorEnd = wayEnds.indexOf(junior.endsWithNode);
+
+                    // append forward
+                    if (seniorEnd >= 0 && juniorStart >= 0 && seniorEnd !== juniorStart) {
+                        senior.childIds.push(...junior.childIds.slice(1));
+                        senior.endsWithNode = junior.endsWithNode;
+                    }
+                    // prepend forward
+                    else if (seniorStart >= 0 && juniorEnd >= 0 && seniorStart !== juniorEnd) {
+                        senior.childIds.unshift(...junior.childIds.slice(0, -1));
+                        senior.startsWithNode = junior.startsWithNode;
+                    }
+                    // append reverse
+                    else if (seniorEnd >= 0 && juniorEnd >= 0 && seniorEnd !== juniorEnd) {
+                        senior.childIds.push(...junior.childIds.reverse().map(w => reverse(w)).slice(1));
+                        senior.endsWithNode = junior.startsWithNode;
+                    }
+                    // prepend reverse
+                    else if (seniorStart >= 0 && juniorStart >= 0 && seniorStart !== juniorStart) {
+                        senior.childIds.unshift(...junior.childIds.reverse().map(w => reverse(w)).slice(0, -1));
+                        senior.startsWithNode = junior.endsWithNode;
+                    }
+                    else {
+                        console.error('How did we get here?');
+                        continue;
+                    }
+
+                    parent.wayGroups!.delete(junior.id);
+                    parent.childIds = parent.childIds.filter(id => id !== junior.id);
+                    
+                    for (const way of junior.children) {
+                        way.parentIds.delete(junior.id);
+                        way.parentIds.add(senior.id);
+                    }
+                }
             }
         }
-
-        const uid = unpack(id);
-        const parentId = pack({ type: 'relation', id: uid.id });
-        this.parentIds.add(parentId);
-        const parent = get(parentId) as Relation | undefined;
-        if (parent) {
-            parent.addChildUnique(id);
-            parent.wayGroups ??= new Map();
-            parent.wayGroups.set(id, this);
-        }
+        */
     }
 }

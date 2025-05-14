@@ -31,6 +31,13 @@ export abstract class Element {
 
     public readonly children = [] as ElementRef[];
 
+    public get firstChild() {
+        return this.children[0]?.element;
+    }
+    public get lastChild() {
+        return this.children[this.children.length - 1]?.element;
+    }
+
     public get name(): string {
         return this._data?.tags?.['name'] 
             ?? this._data?.tags?.['description'] 
