@@ -16,6 +16,12 @@ export type ElementRef = {
     element?: Element,
 };
 
+export type TypedElementRef<T extends Element> = {
+    id: Id,
+    role?: string,
+    element: T,
+};
+
 export abstract class Element {
     /** Maps child IDs to interested parent IDs */
     protected static interests = new Map<Id, Set<Id>>();
@@ -27,15 +33,24 @@ export abstract class Element {
         return this._data;
     }
 
-    public readonly parents = [] as ElementRef[];
+    public readonly parentRefs = [] as ElementRef[];
 
-    public readonly children = [] as ElementRef[];
+    public readonly childRefs = [] as ElementRef[];
+
+    public get firstChildRef() {
+        return this.childRefs[0];
+    }
+
+    public get lastChildRef() {
+        return this.childRefs[this.childRefs.length - 1];
+    }
 
     public get firstChild() {
-        return this.children[0]?.element;
+        return this.firstChildRef?.element;
     }
+
     public get lastChild() {
-        return this.children[this.children.length - 1]?.element;
+        return this.lastChildRef?.element;
     }
 
     public get name(): string {
@@ -66,27 +81,67 @@ export abstract class Element {
         this._data = data;
     }
 
+    public childRefsOfType<T extends Element, U extends OsmElement>(t: new (_: Id, __: U) => T) {
+        return this.childRefs.flatMap(ref => {
+            if (ref.element instanceof t) {
+                return [ref as TypedElementRef<T>];
+            } else {
+                return [];
+            }
+        });
+    }
+
+    public parentRefsOfType<T extends Element, U extends OsmElement>(t: new (_: Id, __: U) => T) {
+        return this.parentRefs.flatMap(ref => {
+            if (ref.element instanceof t) {
+                return [ref as TypedElementRef<T>];
+            } else {
+                return [];
+            }
+        });
+    }
+
+    public childrenOfType<T extends Element, U extends OsmElement>(t: new (_: Id, __: U) => T) {
+        return this.childRefs.flatMap(ref => {
+            if (ref.element instanceof t) {
+                return [ref.element as T];
+            } else {
+                return [];
+            }
+        });
+    }
+
+    public parentsOfType<T extends Element, U extends OsmElement>(t: new (_: Id, __: U) => T) {
+        return this.parentRefs.flatMap(ref => {
+            if (ref.element instanceof t) {
+                return [ref.element as T];
+            } else {
+                return [];
+            }
+        });
+    }
+
     protected addChild(child: Element, role?: string, index?: number) {
         if (index === undefined) {
-            index = this.children.length;
+            index = this.childRefs.length;
         }
 
-        if (index > this.children.length
-            || this.children.find(ref => 
+        if (index > this.childRefs.length
+            || this.childRefs.find(ref => 
                 ref.id === child.id && (!role || ref.role === role))
         ) {
             return;
         }
 
-        this.children.splice(index, 0, {
+        this.childRefs.splice(index, 0, {
             id: child.id,
             role,
             element: child,
         });
 
-        const backRef = child.parents.find(ref => ref.id === this.id);
+        const backRef = child.parentRefs.find(ref => ref.id === this.id);
         if (!backRef || backRef.role !== role) {
-            child.parents.push({
+            child.parentRefs.push({
                 id: this.id,
                 role,
                 element: this,
@@ -94,16 +149,20 @@ export abstract class Element {
         }
     }
 
+    protected addParent(parent: Element, role?: string) {
+        parent.addChild(this, role);
+    }
+
     protected processInterests() {
         // populate child references
-        for (const childRef of this.children) {
+        for (const childRef of this.childRefs) {
             childRef.element = get(childRef.id);
             if (childRef.element) {
                 // if the child is already loaded, add self as a parent
-                let backRef = childRef.element.parents.find(r => r.id === this.id);
+                let backRef = childRef.element.parentRefs.find(r => r.id === this.id);
                 if (!backRef) {
                     backRef = { id: this.id, role: childRef.role };
-                    childRef.element.parents.push(backRef);
+                    childRef.element.parentRefs.push(backRef);
                 }
                 backRef.element = this;
             } else {
@@ -122,7 +181,7 @@ export abstract class Element {
         if (parentIds) {
             for (const parentId of parentIds) {
                 const p: Element | undefined = get(parentId);
-                const ref = p?.children.find(r => r.id === this.id);
+                const ref = p?.childRefs.find(r => r.id === this.id);
                 if (ref) {
                     ref.element = this;
                     parentIds.delete(parentId);

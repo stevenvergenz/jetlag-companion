@@ -1,12 +1,12 @@
 import { Element, ElementRef } from './element';
-import { OsmWay } from './overpass_api';
+import { OsmElement, OsmWay } from './overpass_api';
 import { Id, pack } from './id';
 import Node from './node';
 import { LatLngTuple } from 'leaflet';
 
 export default class Way extends Element {
-    public static isWay(e: Element): boolean {
-        return e.data.type === 'way';
+    public static isWay(e?: OsmElement): boolean {
+        return e?.type === 'way';
     }
 
     public constructor(id: Id, data: OsmWay) {
@@ -17,7 +17,7 @@ export default class Way extends Element {
                 id: pack({ id: numId, type: 'node' }),
             };
 
-            this.children.push(ref);
+            this.childRefs.push(ref);
         }
 
         this.processInterests();
@@ -26,7 +26,7 @@ export default class Way extends Element {
     public get data() { return this._data as OsmWay; }
 
     public get center(): LatLngTuple {
-        const lats = this.children.flatMap(ref => {
+        const lats = this.childRefs.flatMap(ref => {
             if (ref.element instanceof Node) {
                 return [ref.element.lat];
             }
@@ -35,7 +35,7 @@ export default class Way extends Element {
             }
         });
 
-        const lons = this.children.flatMap(ref => {
+        const lons = this.childRefs.flatMap(ref => {
             if (ref.element instanceof Node) {
                 return [ref.element.lon];
             }
@@ -52,10 +52,10 @@ export default class Way extends Element {
 
     protected addChild(child: Element, role?: string, index?: number) {
         if (index === undefined) {
-            index = this.children.length;
+            index = this.childRefs.length;
         }
 
-        if (!Node.isNode(child) || index > this.children.length) {
+        if (!Node.isNode(child.data) || index > this.childRefs.length) {
             return;
         }
 

@@ -1,14 +1,32 @@
 import Relation from './relation';
 import Way from './way';
-import { getSyntheticId, unpack } from './id';
+import { Id, getSyntheticId, unpack } from './id';
 import { OsmElement } from './overpass_api';
 
 export default class Run extends Relation {
-    public static isRun(e: OsmElement): boolean {
-        return e.type === 'relation' && e.tags?.jetlag_synthetic === 'run';
+    public static isRun(e?: OsmElement): boolean {
+        return e?.type === 'relation' && e?.tags?.jetlag_synthetic === 'run';
     }
 
-    public constructor() {
+    public readonly role: string;
+
+    public get firstNodeId(): Id | undefined {
+        if (this.firstChildRef.role === 'forward') {
+            return this.firstChild?.firstChildRef.id;
+        } else {
+            return this.firstChild?.lastChildRef.id;
+        }
+    }
+
+    public get lastNodeId(): Id | undefined {
+        if (this.lastChildRef.role === 'forward') {
+            return this.lastChild?.lastChildRef.id;
+        } else {
+            return this.lastChild?.firstChildRef.id;
+        }
+    }
+
+    public constructor(role: string) {
         const id = getSyntheticId('relation');
         const uid = unpack(id);
         super(id, {
@@ -19,6 +37,8 @@ export default class Run extends Relation {
             },
             members: [],
         });
+
+        this.role = role;
     }
 
     public tryAdd(way: Way): boolean {
@@ -29,23 +49,21 @@ export default class Run extends Relation {
 
         const wayFirstNode = way.firstChild.id;
         const wayLastNode = way.lastChild.id;
-        const runFirstNode = this.firstChild.firstChild.id;
-        const runLastNode = this.lastChild.lastChild.id;
 
-        if (this.children.length === 0) {
-            this.addChild(way);
+        if (this.childRefs.length === 0) {
+            this.addChild(way, 'forward');
         }
-        else if (runLastNode === wayFirstNode) {
-            this.addChild(way);
+        else if (this.lastNodeId === wayFirstNode) {
+            this.addChild(way, 'forward');
         }
-        else if (runFirstNode === wayLastNode) {
-            this.addChild(way, undefined, 0);
+        else if (this.firstNodeId === wayLastNode) {
+            this.addChild(way, 'forward', 0);
         }
-        else if (runFirstNode === wayFirstNode) {
+        else if (this.firstNodeId === wayFirstNode) {
             // TODO: reverse way rendering
             this.addChild(way, 'reversed', 0);
         }
-        else if (runLastNode === wayLastNode) {
+        else if (this.lastNodeId === wayLastNode) {
             // TODO: reverse way rendering
             this.addChild(way, 'reversed');
         }
@@ -60,9 +78,45 @@ export default class Run extends Relation {
     public static generateFromRelation(relation: Relation): Run[] {
         const runs: Run[] = [];
 
-        const ways = relation.children.flatMap(ref => ref.element && Way.isWay(ref.element) ? [ref.element] : []);
-        for (const way of ways) {
-            
+        for (const wayRef of relation.childRefsOfType(Way)) {
+            const wayEnds = [wayRef.element.firstChild?.id, wayRef.element.lastChild?.id];
+            if (wayEnds.some(id => id === undefined)) {
+                continue;
+            }
+
+            // The list of known way groups that successfully added the way 
+            const added = relation.childrenOfType(Run).filter(r => r.role === wayRef.role && r.tryAdd(wayRef.element));
+
+            // no existing way group will take it, add a new one
+            if (added.length === 0) {
+                const r = new Run(wayRef.role!);
+                r.addParent(relation, 'run');
+                r.addChild(wayRef.element, 'forward');
+                continue;
+            }
+
+            // check if the new run bridged two existing runs
+            for (let i = 0; i < added.length - 1; i++) {
+                // the older of the two runs
+                const senior = added[i];
+                const seniorEndWays = [
+                    senior.firstChildRef.id,
+                    senior.lastChildRef.id,
+                ];
+                const junior = added.slice(i + 1).find(r => {
+                    return seniorEndWays.includes(r.firstChildRef.id)
+                        || seniorEndWays.includes(r.lastChildRef.id);
+                });
+
+                if (!junior) {
+                    continue;
+                }
+
+                const seniorStart = wayEnds.indexOf(senior.firstNodeId);
+                const seniorEnd = wayEnds.indexOf(senior.lastNodeId);
+                const juniorStart = wayEnds.indexOf(junior.firstNodeId);
+                const juniorEnd = wayEnds.indexOf(junior.lastNodeId);
+            }
         }
 
         return runs;

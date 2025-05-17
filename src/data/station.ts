@@ -6,8 +6,8 @@ import Node from './node';
 import { OsmElement } from './overpass_api';
 
 export class Station extends Relation {
-    public static isStation(e: OsmElement): boolean {
-        return e.type === 'relation' && e.tags?.jetlag_synthetic === 'station';
+    public static isStation(e?: OsmElement): boolean {
+        return e?.type === 'relation' && e?.tags?.jetlag_synthetic === 'station';
     }
 
     private _typeRanges = [0, 0, 0, 0, 0];
@@ -46,7 +46,7 @@ export class Station extends Relation {
 
         // add any stop areas (above platforms)
 
-        const directStopAreas = platform.parents.flatMap(ref => {
+        const directStopAreas = platform.parentRefs.flatMap(ref => {
             if (!this.has(ref.id)
                 && ref.element?.transportType === TransportType.StopArea) {
                 return [ref.element];
@@ -66,7 +66,7 @@ export class Station extends Relation {
         // add any stations (below stop areas)
 
         const stations = directStopAreas.flatMap(sa => {
-            return sa.children.flatMap(ref => {
+            return sa.childRefs.flatMap(ref => {
                 if (!this.has(ref.id)
                     && ref.element?.transportType === TransportType.Station) {
                     return [ref.element];
@@ -87,7 +87,7 @@ export class Station extends Relation {
         // add any additional stop areas (above stations)
 
         const indirectStopAreas = stations.flatMap(s => {
-            return s.parents.flatMap(ref => {
+            return s.parentRefs.flatMap(ref => {
                 if (!this.has(ref.id)
                     && ref.element?.transportType === TransportType.StopArea) {
                     return [ref.element];
@@ -108,7 +108,7 @@ export class Station extends Relation {
         // add any additional platforms (below stop areas)
 
         const indirectPlatforms = indirectStopAreas.flatMap(sa => {
-            return sa.children.flatMap(ref => {
+            return sa.childRefs.flatMap(ref => {
                 if (!this.has(ref.id)
                     && ref.element?.transportType === TransportType.Platform) {
                     return [ref.element];
@@ -129,7 +129,7 @@ export class Station extends Relation {
         // routes
 
         const routes = [platform, ...indirectPlatforms].flatMap(p => {
-            return p.parents.flatMap(ref => {
+            return p.parentRefs.flatMap(ref => {
                 if (!this.has(ref.id)
                     && ref.element?.transportType === TransportType.Route) {
                     return [ref.element];
@@ -150,7 +150,7 @@ export class Station extends Relation {
         // route masters
 
         const masters = routes.flatMap(r => {
-            return r.parents.flatMap(ref => {
+            return r.parentRefs.flatMap(ref => {
                 if (!this.has(ref.id)
                     && ref.element?.transportType === TransportType.RouteMaster) {
                     return [ref.element];

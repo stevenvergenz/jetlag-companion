@@ -1,13 +1,13 @@
 import { Element, ElementRef } from './element';
 import Way from './way';
 import Node from './node';
-import { OsmElementType, OsmRelation } from './overpass_api';
+import { OsmElementType, OsmElement, OsmRelation } from './overpass_api';
 import { Id, packFrom, unpack } from './id';
 import { get } from '../overpass_cache';
 
 export default class Relation extends Element {
-    public static isRelation(e: Element): boolean {
-        return e.data.type === 'relation';
+    public static isRelation(e?: OsmElement): boolean {
+        return e?.type === 'relation';
     }
 
     public constructor(id: Id, data: OsmRelation) {
@@ -19,7 +19,7 @@ export default class Relation extends Element {
                 role: m.role,
             };
 
-            this.children.push(childRef);
+            this.childRefs.push(childRef);
         }
 
         this.processInterests();
@@ -30,11 +30,11 @@ export default class Relation extends Element {
     }
 
     public has(id: Id): boolean {
-        return this.children.findIndex(ref => ref.id === id) >= 0;
+        return this.childRefs.findIndex(ref => ref.id === id) >= 0;
     }
 
     public roleOf(id: Id): string | undefined {
-        const ref = this.children.find(ref => ref.id === id);
+        const ref = this.childRefs.find(ref => ref.id === id);
         return ref?.role;
     }
 
@@ -87,12 +87,12 @@ export default class Relation extends Element {
     }
 
     protected addChild(child: Element, role?: string, index?: number) {
-        if (this.children.find(ref => ref.id === child.id && (!role || ref.role === role))) {
+        if (this.childRefs.find(ref => ref.id === child.id && (!role || ref.role === role))) {
             return;
         }
 
         if (index === undefined) {
-            index = this.children.length;
+            index = this.childRefs.length;
         }
 
         const uid = unpack(child.id);
