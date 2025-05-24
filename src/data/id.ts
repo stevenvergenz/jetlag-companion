@@ -5,15 +5,13 @@ export type Id = string;
 export type IdUnpacked = {
     type: OsmElementType,
     id: number,
-    offset?: number,
-    reverse?: boolean,
 };
 
 const idRegex = /^(r|w|n):(\d+)(?:\/(\d+))?$/;
-const typePrefixMap = new Map([
-    ['r', 'relation' as OsmElementType],
-    ['w', 'way' as OsmElementType],
-    ['n', 'node' as OsmElementType],
+const typePrefixMap = new Map<string, OsmElementType>([
+    ['r', 'relation'],
+    ['w', 'way'],
+    ['n', 'node'],
 ]);
 const typePrefixReverseMap = [...typePrefixMap.entries()]
     .map(([k, v]) => [v, k])
@@ -29,20 +27,13 @@ export function unpack(id: Id): IdUnpacked {
     }
 
     return {
-        reverse: match[1] === '-',
         type: typePrefixMap.get(match[2])!,
         id: parseInt(match[3], 10),
-        offset: match[3] ? parseInt(match[4], 10) : undefined
     };
 }
 
 export function pack(obj: IdUnpacked): Id {
-    if (obj.offset !== undefined) {
-        return `${obj.reverse ? '-' : ''}${typePrefixReverseMap.get(obj.type)}:${obj.id}/${obj.offset}`;
-    }
-    else {
-        return `${obj.reverse ? '-' : ''}${typePrefixReverseMap.get(obj.type)}:${obj.id}`;
-    }
+    return `${typePrefixReverseMap.get(obj.type)}:${obj.id}`;
 }
 
 export function packFrom({ type, id, ref }: { type: OsmElementType, id?: number, ref?: number}): Id {
@@ -50,23 +41,6 @@ export function packFrom({ type, id, ref }: { type: OsmElementType, id?: number,
         throw new Error('id or ref must be defined');
     }
     return pack({ type, id: (id ?? ref)! });
-}
-
-export function reverse(id: Id): Id {
-    if (id.startsWith('-')) {
-        return id.slice(1);
-    }
-    else {
-        return `-${id}`;
-    }
-}
-
-export function isReversed(id: Id): boolean {
-    return id.startsWith('-');
-}
-
-export function unreversed(id: Id): Id {
-    return isReversed(id) ? id.slice(1) : id;
 }
 
 let nextSyntheticId = -1;
@@ -78,4 +52,8 @@ export function getSyntheticId(type: OsmElementType): Id {
 export function updateSyntheticId(id: Id) {
     const unpacked = unpack(id);
     nextSyntheticId = Math.min(nextSyntheticId, unpacked.id - 1);
+}
+
+export function resetSyntheticIdCounter() {
+    nextSyntheticId = -1;
 }

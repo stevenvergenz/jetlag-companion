@@ -2,9 +2,9 @@ import { LatLngTuple } from 'leaflet';
 import * as turf from '@turf/turf';
 import { Feature } from 'geojson';
 
-import { Id, pack, unpack, unreversed } from './id';
-import { Element, Node, Relation, Way } from './element';
-import { QueryElement, QueryResult, OsmElement, OsmElementType, requestAsync, requestTransport } from './data/overpass_api';
+import { Id, pack, unpack } from '../data/id';
+import { Element, ElementCtor, Node, Relation, Way } from '../data/index';
+import { QueryElement, QueryResult, OsmElement, OsmElementType, requestAsync, requestTransport } from '../data/overpass_api';
 
 type TransportType = 'platform' | 'station' | 'stop_area' | 'route' | 'route_master' | undefined;
 
@@ -240,7 +240,6 @@ export async function getAsync(
     ids: Id[],
     opts?: Partial<GetOptions>,
 ): Promise<(Element | undefined)[]> {
-    ids = ids.map(unreversed);
     const { request, cache } = { ...DefaultOptions, ...opts };
 
     // unreverse and filter out waygroups
@@ -255,19 +254,6 @@ export async function getAsync(
         remainingIds.delete(id);
     }
     console.log('[load] After memcache,', remainingIds.size, 'elements remaining');
-    if (remainingIds.size === 0) {
-        return ids.map(id => results.get(id));
-    }
-
-    // waygroups are not stored in memory cache, but their parent relations are
-    const wgs = [...remainingIds.values()].filter(id => unpack(id).type === 'wayGroup');
-    for (const id of wgs) {
-        const parentId = pack({ type: 'relation', id: unpack(id).id });
-        const r = memCacheId.get(parentId) as Relation | undefined;
-        results.set(id, r?.wayGroups?.get(id));
-        remainingIds.delete(id);
-    }
-    console.log('[load] After waygroups,', remainingIds.size, 'elements remaining');
     if (remainingIds.size === 0) {
         return ids.map(id => results.get(id));
     }
@@ -340,14 +326,12 @@ export async function getAsync(
     return ids.map(id => results.get(id));
 }
 
-export function get(id: Id): Element | undefined {
-    const idu = unpack(id);
-    if (idu.type === 'wayGroup') {
-        const parentId = pack({ type: 'relation', id: idu.id });
-        return (get(parentId) as Relation | undefined)?.wayGroups?.get(id);
-    }
-    else {
-        return memCacheId.get(unreversed(id));
+export function get<T extends Element, U extends OsmElement>(id: Id, t: ElementCtor<T, U>): T | undefined {
+    const e = memCacheId.get(id);
+    if (t && e instanceof t) {
+        return e as T;
+    } else {
+        return undefined;
     }
 }
 
@@ -407,7 +391,7 @@ function filterByPoly(elements: QueryResult, polygon: Feature): QueryResult {
                 return false;
             }
         } else if (element instanceof Way || element instanceof Relation) {
-            if (element.children.some(n => containedByPoly(n))) {
+            if (element.childRefs.some(ref => containedByPoly(ref.element))) {
                 //console.log(`[poly] ${element.id} (${element.data.tags?.public_transport}) contained in poly`);
                 filtered.set(element.id, element);
                 return true;

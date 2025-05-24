@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 
 import { setup, relation, ways, nodes } from './test_common';
 
-import { calcIntersection, calcRelationPath, calcWayGroupPath, calcWayPath, mergeRelations } from '../boundary_calc';
+import { calcIntersection, calcRelationPath, calcRunPath, calcWayPath, mergeRelations } from '../util/boundary_calc';
 import { Id, reverse } from '../id';
 import { WayGroup } from '../element';
 import { LatLngTuple } from 'leaflet';
@@ -42,7 +42,7 @@ test('WayGroup path', () => {
     const r = relation(1, [3, 4, 5]);
     r.calcWayGroups();
     const wg = r.children[3] as WayGroup;
-    const path = calcWayGroupPath(wg, new Set<Id>(['w:3']));
+    const path = calcRunPath(wg, new Set<Id>(['w:3']));
     const realPath = nodes(4, 5, 6, 7).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
 });
@@ -52,7 +52,7 @@ test('WayGroup path reverse', () => {
     const r = relation(1, [3, 400, 5]);
     r.calcWayGroups();
     const wg = r.children[3] as WayGroup;
-    const path = calcWayGroupPath(wg, new Set<Id>(['w:3']));
+    const path = calcRunPath(wg, new Set<Id>(['w:3']));
     const realPath = nodes(4, 5, 6, 7).map(n => [n.lat, n.lon]);
     expect(path).toEqual(realPath);
 });

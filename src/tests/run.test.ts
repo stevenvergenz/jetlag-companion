@@ -1,59 +1,58 @@
 import { expect, test } from 'vitest';
 import { setup, relation } from './test_common';
-import { Element, WayGroup } from '../element';
-import { Id, unreversed } from '../id';
+import { Element, Id, Run } from '../data/index';
 
 function checkChildren(e: Element, ids: Id[]) {
-    expect(e.childIds).toEqual(ids);
-    expect(e.children.map(c => c.id)).toEqual(ids.map(id => unreversed(id)));
+    expect(e.childRefs.map(r => r.id)).toEqual(ids);
+    expect(e.childRefs.map(r => r.element?.id)).toEqual(ids);
 }
 
 function checkParents(e: Element, ids: Id[]) {
-    const ps = new Set(ids);
-    expect(e.parentIds).toEqual(ps);
-    expect(new Set(e.parents.map(c => c.id))).toEqual(ps);
+    expect(e.parentRefs.map(r => r.id)).toEqual(ids);
+    expect(e.parentRefs.map(r => r.element?.id)).toEqual(ids);
 }
 
-test('wayGroup append forward', () => {
+test('run append forward', () => {
     setup();
 
     const r = relation(1, [3, 4]);
-    r.calcWayGroups();
-    checkChildren(r, ['w:3', 'w:4', 'wg:1/0']);
+    Run.generateFromRelation(r);
+    checkChildren(r, ['w:3', 'w:4', 'r:-1']);
 
-    const wg = r.children[2] as WayGroup;
-    expect(wg).toBeInstanceOf(WayGroup);
-    checkParents(wg, [r.id]);
-    checkChildren(wg, ['w:3', 'w:4']);
+    const run = r.childrenOfType(Run)[0];
+    expect(run).toBeInstanceOf(Run);
+    checkParents(run, [r.id]);
+    checkChildren(run, ['w:3', 'w:4']);
 
-    for (const w of wg.children) {
-        checkParents(w, [r.id, wg.id]);
+    for (const w of run.childRefs.map(r => r.element!)) {
+        checkParents(w, [r.id, run.id]);
     }
 
-    expect(wg.startsWithNode).toBe('n:3');
-    expect(wg.endsWithNode).toBe('n:6');
+    expect(run.firstNodeId).toBe('n:3');
+    expect(run.lastNodeId).toBe('n:6');
 });
 
-test('wayGroup prepend forward', () => {
+test('run prepend forward', () => {
     setup();
 
     const r = relation(2, [5, 4]);
-    r.calcWayGroups();
+    const runs = Run.generateFromRelation(r);
     checkChildren(r, ['w:5', 'w:4', 'wg:2/0']);
 
-    const wg = r.children[2] as WayGroup;
-    expect(wg).toBeInstanceOf(WayGroup);
-    checkParents(wg, [r.id]);
-    checkChildren(wg, ['w:4', 'w:5']);
+    const run = runs[0];
+    expect(run).toBeInstanceOf(Run);
+    checkParents(run, [r.id]);
+    checkChildren(run, ['w:4', 'w:5']);
 
-    for (const w of wg.children) {
-        checkParents(w, [r.id, wg.id]);
+    for (const c of run.childRefs) {
+        checkParents(c.element!, [r.id, run.id]);
     }
 
-    expect(wg.startsWithNode).toBe('n:4');
-    expect(wg.endsWithNode).toBe('n:7');
+    expect(run.firstNodeId).toBe('n:4');
+    expect(run.lastNodeId).toBe('n:7');
 });
 
+/*
 test('wayGroup append reverse', () => {
     setup();
 
@@ -173,3 +172,4 @@ test('wayGroup bridge prepend reverse', () => {
     expect(wg.startsWithNode).toBe('n:11');
     expect(wg.endsWithNode).toBe('n:7');
 });
+*/

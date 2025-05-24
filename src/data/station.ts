@@ -3,13 +3,8 @@ import { TransportType } from './element';
 import Relation from './relation';
 import Way from './way';
 import Node from './node';
-import { OsmElement } from './overpass_api';
 
-export class Station extends Relation {
-    public static isStation(e?: OsmElement): boolean {
-        return e?.type === 'relation' && e?.tags?.jetlag_synthetic === 'station';
-    }
-
+export default class Station extends Relation {
     private _typeRanges = [0, 0, 0, 0, 0];
 
     public constructor() {
@@ -26,12 +21,12 @@ export class Station extends Relation {
     }
 
     public get visuals(): (Way | Node)[] {
-        const s = this.firstElementWithRole<Node>('station', 'node');
+        const s = this.firstElementWithRole('station', Node);
         if (s) {
             return [s];
         }
         else {
-            return this.allElementsWithRole<Way | Node>('platform');
+            return this.allElementsWithRole('platform') as (Way | Node)[];
         }
     }
 

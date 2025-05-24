@@ -1,12 +1,8 @@
 import { Element } from './element';
-import { OsmElement, OsmNode } from './overpass_api';
+import { OsmNode } from './overpass_api';
 import { Id } from './id';
 
 export default class Node extends Element {
-    public static isNode(e?: OsmElement): boolean {
-        return e?.type === 'node';
-    }
-
     public constructor(id: Id, data: OsmNode) {
         super(id, data);
         this.processInterests();

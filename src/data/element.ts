@@ -1,6 +1,6 @@
-import { OsmElement } from "./overpass_api";
-import { Id } from './id';
-import { get } from "../overpass_cache";
+import { OsmElement, OsmElementType } from "./overpass_api";
+import { Id, unpack } from './index';
+import { get } from "../util/overpass_cache";
 
 export enum TransportType {
     Platform,
@@ -22,7 +22,9 @@ export type TypedElementRef<T extends Element> = {
     element: T,
 };
 
-export abstract class Element {
+export type ElementCtor<T extends Element, U extends OsmElement = OsmElement> = new (_: Id, __: U) => T;
+
+export class Element {
     /** Maps child IDs to interested parent IDs */
     protected static interests = new Map<Id, Set<Id>>();
 
@@ -81,27 +83,53 @@ export abstract class Element {
         this._data = data;
     }
 
-    public childRefsOfType<T extends Element, U extends OsmElement>(t: new (_: Id, __: U) => T) {
+    public childRefsOfType(t: OsmElementType): ElementRef[];
+    public childRefsOfType<T extends Element, U extends OsmElement>(t: ElementCtor<T, U>): TypedElementRef<T>[];
+    public childRefsOfType<T extends Element, U extends OsmElement>(
+        t: OsmElementType | ElementCtor<T, U>,
+    ): ElementRef[] | TypedElementRef<T>[] {
         return this.childRefs.flatMap(ref => {
-            if (ref.element instanceof t) {
-                return [ref as TypedElementRef<T>];
-            } else {
-                return [];
+            if (typeof t === 'string') {
+                if (unpack(ref.id).type === t) {
+                    return [ref as ElementRef];
+                }
+                else {
+                    return [];
+                }
+            }
+            else {
+                if (ref.element instanceof t) {
+                    return [ref as TypedElementRef<T>];
+                } else {
+                    return [];
+                }
             }
         });
     }
 
-    public parentRefsOfType<T extends Element, U extends OsmElement>(t: new (_: Id, __: U) => T) {
+    public parentRefsOfType(t: OsmElementType): ElementRef[];
+    public parentRefsOfType<T extends Element, U extends OsmElement>(t: ElementCtor<T, U>): TypedElementRef<T>[];
+    public parentRefsOfType<T extends Element, U extends OsmElement>(t: OsmElementType | ElementCtor<T, U>) {
         return this.parentRefs.flatMap(ref => {
-            if (ref.element instanceof t) {
-                return [ref as TypedElementRef<T>];
-            } else {
-                return [];
+            if (typeof t === 'string') {
+                if (unpack(ref.id).type === t) {
+                    return [ref as ElementRef];
+                }
+                else {
+                    return [];
+                }
+            }
+            else {
+                if (ref.element instanceof t) {
+                    return [ref as TypedElementRef<T>];
+                } else {
+                    return [];
+                }
             }
         });
     }
 
-    public childrenOfType<T extends Element, U extends OsmElement>(t: new (_: Id, __: U) => T) {
+    public childrenOfType<T extends Element, U extends OsmElement>(t: ElementCtor<T, U>) {
         return this.childRefs.flatMap(ref => {
             if (ref.element instanceof t) {
                 return [ref.element as T];
@@ -111,7 +139,7 @@ export abstract class Element {
         });
     }
 
-    public parentsOfType<T extends Element, U extends OsmElement>(t: new (_: Id, __: U) => T) {
+    public parentsOfType<T extends Element, U extends OsmElement>(t: ElementCtor<T, U>) {
         return this.parentRefs.flatMap(ref => {
             if (ref.element instanceof t) {
                 return [ref.element as T];
@@ -153,10 +181,28 @@ export abstract class Element {
         parent.addChild(this, role);
     }
 
+    protected orphan() {
+        for (const ref of this.parentRefs) {
+            const parent = ref.element;
+            if (parent) {
+                parent.childRefs.splice(parent.childRefs.findIndex(r => r.id === this.id), 1);
+            }
+        }
+        this.parentRefs.length = 0;
+
+        for (const ref of this.childRefs) {
+            const child = ref.element;
+            if (child) {
+                child.parentRefs.splice(child.parentRefs.findIndex(r => r.id === this.id), 1);
+            }
+        }
+        this.childRefs.length = 0;
+    }
+
     protected processInterests() {
         // populate child references
         for (const childRef of this.childRefs) {
-            childRef.element = get(childRef.id);
+            childRef.element = get(childRef.id, Element);
             if (childRef.element) {
                 // if the child is already loaded, add self as a parent
                 let backRef = childRef.element.parentRefs.find(r => r.id === this.id);
@@ -180,7 +226,7 @@ export abstract class Element {
         const parentIds = Element.interests.get(this.id);
         if (parentIds) {
             for (const parentId of parentIds) {
-                const p: Element | undefined = get(parentId);
+                const p = get(parentId, Element);
                 const ref = p?.childRefs.find(r => r.id === this.id);
                 if (ref) {
                     ref.element = this;

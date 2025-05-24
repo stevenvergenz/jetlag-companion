@@ -1,7 +1,7 @@
 import { LatLngTuple } from 'leaflet';
-import { Relation, Way, Node, HierarchyHelper } from '../element';
-import { memCacheId } from '../overpass_cache';
-import { pack } from '../id';
+import { Relation, Way, Node } from '../data/index';
+import { memCacheId } from '../util/overpass_cache';
+import { pack, resetSyntheticIdCounter } from '../data/id';
 
 /**
  * ```text
@@ -20,7 +20,7 @@ import { pack } from '../id';
  */
 export function setup(): void {
     memCacheId.clear();
-    HierarchyHelper.reset();
+    resetSyntheticIdCounter();
 
     layout([    1,    2   ], [-1,  2], [2, 0]);
     layout([ 3, 4, 5, 6, 7], [-2,  1], [1, 0]);

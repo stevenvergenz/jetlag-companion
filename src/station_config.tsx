@@ -3,9 +3,9 @@ import { CircleMarker, LayerGroup, FeatureGroup, Polygon, Tooltip } from 'react-
 import { PathOptions } from 'leaflet';
 
 import { /* Id, */ unpack } from './id';
-import { TreeNode } from './tree_node';
+import { TreeNode } from './util/tree_node';
 import { SharedContext } from './context';
-import { getByTransportTypeAsync } from './overpass_cache';
+import { getByTransportTypeAsync } from './util/overpass_cache';
 import { Way, Node } from './element';
 import StationGroup from './data/station';
 

@@ -1,5 +1,5 @@
 import { expect, test, beforeEach } from 'vitest';
-import { dbClear, getAsync, get } from '../overpass_cache';
+import { dbClear, getAsync, get } from '../util/overpass_cache';
 
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));

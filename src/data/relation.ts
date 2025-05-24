@@ -1,15 +1,8 @@
-import { Element, ElementRef } from './element';
-import Way from './way';
-import Node from './node';
-import { OsmElementType, OsmElement, OsmRelation } from './overpass_api';
+import { Element, ElementRef, ElementCtor } from './element';
+import { OsmElement, OsmElementType, OsmRelation } from './overpass_api';
 import { Id, packFrom, unpack } from './id';
-import { get } from '../overpass_cache';
 
 export default class Relation extends Element {
-    public static isRelation(e?: OsmElement): boolean {
-        return e?.type === 'relation';
-    }
-
     public constructor(id: Id, data: OsmRelation) {
         super(id, data);
 
@@ -53,37 +46,22 @@ export default class Relation extends Element {
             .map(m => packFrom(m));
     }
 
-    public firstElementWithRole<T extends Element = Element>(role: string, type?: OsmElementType): T | undefined {
-        const id = this.firstIdWithRole(role, type);
-        return id ? get(id) : undefined;
+    public firstElementWithRole<T extends Element, U extends OsmElement>(role: string, t?: ElementCtor<T, U>): T | undefined {
+        for (const ref of this.childRefs) {
+            if (ref.role === role && (!t || ref.element instanceof t)) {
+                return ref.element as T | undefined;
+            }
+        }
     }
 
-    public firstRelationWithRole(role: string): Relation | undefined {
-        return this.firstElementWithRole<Relation>(role, 'relation');
-    }
-
-    public firstWayWithRole(role: string): Way | undefined {
-        return this.firstElementWithRole<Way>(role, 'way');
-    }
-
-    public firstNodeWithRole(role: string): Node | undefined {
-        return this.firstElementWithRole<Node>(role, 'node');
-    }
-
-    public allElementsWithRole<T extends Element = Element>(role: string, type?: OsmElementType): T[] {
-        return this.allIdsWithRole(role, type).map(id => get(id));
-    }
-
-    public allRelationsWithRole(role: string): Relation[] {
-        return this.allElementsWithRole<Relation>(role, 'relation');
-    }
-
-    public allWaysWithRole(role: string): Way[] {
-        return this.allElementsWithRole<Way>(role, 'way');
-    }
-
-    public allNodesWithRole(role: string): Node[] {
-        return this.allElementsWithRole<Node>(role, 'node');
+    public allElementsWithRole<T extends Element, U extends OsmElement>(role: string, t?: ElementCtor<T, U>): T[] {
+        const ret: T[] = [];
+        for (const ref of this.childRefs) {
+            if (ref.role === role && (!t || ref.element instanceof t)) {
+                ret.push(ref.element as T);
+            }
+        }
+        return ret;
     }
 
     protected addChild(child: Element, role?: string, index?: number) {

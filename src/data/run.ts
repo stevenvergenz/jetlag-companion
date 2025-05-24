@@ -1,17 +1,14 @@
-import Relation from './relation';
-import Way from './way';
+import { Relation, Way } from './index';
 import { Id, getSyntheticId, unpack } from './id';
-import { OsmElement } from './overpass_api';
 
 export default class Run extends Relation {
-    public static isRun(e?: OsmElement): boolean {
-        return e?.type === 'relation' && e?.tags?.jetlag_synthetic === 'run';
-    }
 
+    public static readonly forwardRole = 'forward';
+    public static readonly reverseRole = 'reverse';
     public readonly role: string;
 
     public get firstNodeId(): Id | undefined {
-        if (this.firstChildRef.role === 'forward') {
+        if (this.firstChildRef.role === Run.forwardRole) {
             return this.firstChild?.firstChildRef.id;
         } else {
             return this.firstChild?.lastChildRef.id;
@@ -19,7 +16,7 @@ export default class Run extends Relation {
     }
 
     public get lastNodeId(): Id | undefined {
-        if (this.lastChildRef.role === 'forward') {
+        if (this.lastChildRef.role === Run.forwardRole) {
             return this.lastChild?.lastChildRef.id;
         } else {
             return this.lastChild?.firstChildRef.id;
@@ -51,21 +48,21 @@ export default class Run extends Relation {
         const wayLastNode = way.lastChild.id;
 
         if (this.childRefs.length === 0) {
-            this.addChild(way, 'forward');
+            this.addChild(way, Run.forwardRole);
         }
         else if (this.lastNodeId === wayFirstNode) {
-            this.addChild(way, 'forward');
+            this.addChild(way, Run.forwardRole);
         }
         else if (this.firstNodeId === wayLastNode) {
-            this.addChild(way, 'forward', 0);
+            this.addChild(way, Run.forwardRole, 0);
         }
         else if (this.firstNodeId === wayFirstNode) {
             // TODO: reverse way rendering
-            this.addChild(way, 'reversed', 0);
+            this.addChild(way, Run.reverseRole, 0);
         }
         else if (this.lastNodeId === wayLastNode) {
             // TODO: reverse way rendering
-            this.addChild(way, 'reversed');
+            this.addChild(way, Run.reverseRole);
         }
         else {
             return false;
@@ -91,7 +88,7 @@ export default class Run extends Relation {
             if (added.length === 0) {
                 const r = new Run(wayRef.role!);
                 r.addParent(relation, 'run');
-                r.addChild(wayRef.element, 'forward');
+                r.addChild(wayRef.element, Run.forwardRole);
                 continue;
             }
 
@@ -116,91 +113,37 @@ export default class Run extends Relation {
                 const seniorEnd = wayEnds.indexOf(senior.lastNodeId);
                 const juniorStart = wayEnds.indexOf(junior.firstNodeId);
                 const juniorEnd = wayEnds.indexOf(junior.lastNodeId);
+
+                let newChildren: Way[];
+                // append forward
+                if (seniorEnd >= 0 && juniorStart >= 0 && seniorEnd !== juniorStart
+                    // prepend reverse
+                    || seniorStart >= 0 && juniorStart >= 0 && seniorStart !== juniorStart
+                ) {
+                    newChildren = junior.childrenOfType(Way).slice(1);
+                }
+                // prepend forward
+                else if (seniorStart >= 0 && juniorEnd >= 0 && seniorStart !== juniorEnd
+                    // append reverse
+                    || seniorEnd >= 0 && juniorEnd >= 0 && seniorEnd !== juniorEnd
+                ) {
+                    newChildren = junior.childrenOfType(Way).reverse().slice(1);
+                }
+                else {
+                    console.error('How did we get here?');
+                    continue;
+                }
+
+                for (const w of newChildren) {
+                    if (!senior.tryAdd(w)) {
+                        throw new Error(`Failed to add way ${w.id} to run`);
+                    }
+                }
+
+                junior.orphan();
             }
         }
 
         return runs;
-        /*
-        public static fulfillInterestRelationWay(child: Way, parent: Relation) {
-            console.log(`[graph] checking groups with ${child.id} for ${parent.id}`);
-            // All roles for the fulfilled way
-            const roles = new Set(parent.data.members
-                .filter(m => packFrom(m) === child.id)
-                .map(m => m.role));
-            if (roles.size === 0) {
-                return;
-            }
-
-            const wayEnds = [child.childIds[0], child.childIds[child.childIds.length - 1]];
-
-            for (const role of roles) {
-                // The list of known way groups that successfully added the fulfilled way 
-                const added = [...parent.wayGroups!.values()]
-                    .filter(e => e.role === role && e.add(child));
-
-                // no existing way group will take it, add a new one
-                if (added.length === 0) {
-                    WayGroup.fromWays(parent.id, role, child);
-                    continue;
-                }
-
-                // check if the new way bridged two existing way groups
-                for (let i = 0; i < added.length - 1; i++) {
-                    // The older of two way groups
-                    const senior = added[i];
-                    const seniorEndWays = [
-                        unreversed(senior.childIds[0]), 
-                        unreversed(senior.childIds[senior.childIds.length - 1]),
-                    ];
-                    const junior = added.slice(i+1).find(wg => {
-                        return seniorEndWays.includes(unreversed(wg.childIds[0]))
-                            || seniorEndWays.includes(unreversed(wg.childIds[wg.childIds.length - 1]));
-                    });
-
-                    if (!junior) {
-                        continue;
-                    }
-
-                    const seniorStart = wayEnds.indexOf(senior.startsWithNode);
-                    const seniorEnd = wayEnds.indexOf(senior.endsWithNode);
-                    const juniorStart = wayEnds.indexOf(junior.startsWithNode);
-                    const juniorEnd = wayEnds.indexOf(junior.endsWithNode);
-
-                    // append forward
-                    if (seniorEnd >= 0 && juniorStart >= 0 && seniorEnd !== juniorStart) {
-                        senior.childIds.push(...junior.childIds.slice(1));
-                        senior.endsWithNode = junior.endsWithNode;
-                    }
-                    // prepend forward
-                    else if (seniorStart >= 0 && juniorEnd >= 0 && seniorStart !== juniorEnd) {
-                        senior.childIds.unshift(...junior.childIds.slice(0, -1));
-                        senior.startsWithNode = junior.startsWithNode;
-                    }
-                    // append reverse
-                    else if (seniorEnd >= 0 && juniorEnd >= 0 && seniorEnd !== juniorEnd) {
-                        senior.childIds.push(...junior.childIds.reverse().map(w => reverse(w)).slice(1));
-                        senior.endsWithNode = junior.startsWithNode;
-                    }
-                    // prepend reverse
-                    else if (seniorStart >= 0 && juniorStart >= 0 && seniorStart !== juniorStart) {
-                        senior.childIds.unshift(...junior.childIds.reverse().map(w => reverse(w)).slice(0, -1));
-                        senior.startsWithNode = junior.endsWithNode;
-                    }
-                    else {
-                        console.error('How did we get here?');
-                        continue;
-                    }
-
-                    parent.wayGroups!.delete(junior.id);
-                    parent.childIds = parent.childIds.filter(id => id !== junior.id);
-                    
-                    for (const way of junior.children) {
-                        way.parentIds.delete(junior.id);
-                        way.parentIds.add(senior.id);
-                    }
-                }
-            }
-        }
-        */
     }
 }

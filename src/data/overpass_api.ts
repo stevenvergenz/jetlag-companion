@@ -1,6 +1,4 @@
-import Node from './node';
-import Relation from './relation';
-import Way from './way';
+import { Relation, Way, Node } from './index';
 import { Id, packFrom, unpack } from './id';
 
 const endpoint = 'https://overpass-api.de/api/interpreter';

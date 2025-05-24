@@ -1,14 +1,10 @@
 import { Element, ElementRef } from './element';
-import { OsmElement, OsmWay } from './overpass_api';
+import { OsmWay } from './overpass_api';
 import { Id, pack } from './id';
 import Node from './node';
 import { LatLngTuple } from 'leaflet';
 
 export default class Way extends Element {
-    public static isWay(e?: OsmElement): boolean {
-        return e?.type === 'way';
-    }
-
     public constructor(id: Id, data: OsmWay) {
         super(id, data);
 
@@ -55,7 +51,7 @@ export default class Way extends Element {
             index = this.childRefs.length;
         }
 
-        if (!Node.isNode(child.data) || index > this.childRefs.length) {
+        if (!(child instanceof Node) || index > this.childRefs.length) {
             return;
         }
 

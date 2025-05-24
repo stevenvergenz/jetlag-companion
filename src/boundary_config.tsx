@@ -1,9 +1,8 @@
 import { ReactNode, useContext, useEffect, useState } from 'react';
 
-import { Id, pack, packFrom, unpack } from './id';
-import { getAsync } from './overpass_cache';
-import { Relation, Way, WayGroup } from './element';
-import { TreeNode } from './tree_node';
+import { Id, pack, packFrom, unpack, Relation, Way, Run } from './data/index';
+import { getAsync } from './util/overpass_cache';
+import { TreeNode } from './util/tree_node';
 import { SharedContext, notExcluded } from './context';
 
 export function BoundaryConfig(): ReactNode {

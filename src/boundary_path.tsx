@@ -3,7 +3,7 @@ import { LatLngTuple, LatLngBounds, PathOptions } from 'leaflet';
 import { LayerGroup, Polyline, useMap } from 'react-leaflet';
 
 import { Id } from './id';
-import { getAsync } from './overpass_cache';
+import { getAsync } from './util/overpass_cache';
 import { Relation, WayGroup, Way, Node } from './element';
 import { SharedContext, notExcluded } from './context';
 
