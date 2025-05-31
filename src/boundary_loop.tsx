@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect, useContext } from 'react';
+import { ReactNode, useState, useEffect, useContext, useMemo } from 'react';
 import { LatLngTuple, LatLngBounds, LatLngExpression } from 'leaflet';
 import { LayerGroup, Polygon, useMap } from 'react-leaflet';
 import { SharedContext } from './context';
@@ -7,13 +7,28 @@ import { BoundaryError, generateBoundaryLoopPath } from './util/boundary_calc';
 export function BoundaryLoop(): ReactNode {
     const map = useMap();
     const {
-        boundaryIncluded,
-        boundaryExcluded,
-        setBoundaryPath,
-        setBoundaryErrors,
+        //boundaryIncluded,
+        //boundaryExcluded,
+        boundaryPath,
+        //setBoundaryPath,
+        //setBoundaryErrors,
         boundaryEditing,
     } = useContext(SharedContext);
-    const [poly, setPoly] = useState([] as LatLngExpression[][]);
+
+    const poly = useMemo(() => {
+        const innerBounds = new LatLngBounds(boundaryPath!);
+        const outerBounds = innerBounds.pad(2);
+        const p = [
+            [
+                outerBounds.getNorthEast(), outerBounds.getNorthWest(),
+                outerBounds.getSouthWest(), outerBounds.getSouthEast(),
+            ],
+            boundaryPath!,
+        ];
+        map.fitBounds(innerBounds, { padding: [0, 0] });
+        return p;
+    }, [boundaryPath]);
+    /*const [poly, setPoly] = useState([] as LatLngExpression[][]);
 
     useEffect(() => {
         async function helper() {
@@ -53,7 +68,7 @@ export function BoundaryLoop(): ReactNode {
             map.fitBounds(innerBounds, { padding: [0, 0] });
         }
         helper();
-    }, [boundaryIncluded, boundaryExcluded, map, boundaryEditing, setBoundaryPath, setBoundaryErrors]);
+    }, [boundaryIncluded, boundaryExcluded, map, boundaryEditing, setBoundaryPath, setBoundaryErrors]);*/
 
     if (!boundaryEditing) {
         return <LayerGroup>

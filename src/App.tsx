@@ -6,7 +6,7 @@ import { MapContainer, TileLayer } from 'react-leaflet';
 import { TopBar } from './top_bar';
 import { ContextProvider } from './context';
 import { SideBar } from './side_bar';
-import { BoundaryLayer } from './boundary_path';
+//import { BoundaryLayer } from './boundary_path';
 import { BoundaryLoop } from './boundary_loop';
 import { StationMarkers } from './station_config';
 
@@ -21,7 +21,7 @@ export default function App(): ReactNode {
           zoom={4}
         >
           <TileLayer url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'></TileLayer>
-          <BoundaryLayer />
+          { /* <BoundaryLayer /> */ }
           <BoundaryLoop />
           <StationMarkers />
         </MapContainer>

@@ -1,5 +1,6 @@
 import { expect, test, beforeEach } from 'vitest';
 import { dbClear, getAsync, get } from '../util/overpass_cache';
+import { Element } from '../data/index';
 
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -46,6 +47,6 @@ test('double request', async () => {
 
 test('get sync', async () => {
     await expect(getAsync(['r:2859048'], { request: true, cache: true })).resolves.toHaveLength(1);
-    const r = get('r:2859048');
+    const r = get('r:2859048', Element);
     expect(r).toBeDefined();
 });

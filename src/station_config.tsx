@@ -2,11 +2,10 @@ import { ReactNode, useEffect, useContext } from 'react';
 import { CircleMarker, LayerGroup, FeatureGroup, Polygon, Tooltip } from 'react-leaflet';
 import { PathOptions } from 'leaflet';
 
-import { /* Id, */ unpack } from './id';
+import { /* Id, */ unpack, Element, Relation, Way, Node } from './data/index';
 import { TreeNode } from './util/tree_node';
 import { SharedContext } from './context';
 import { getByTransportTypeAsync } from './util/overpass_cache';
-import { Way, Node } from './element';
 import StationGroup from './data/station';
 
 const StationStyle: PathOptions = {
@@ -53,10 +52,10 @@ export function StationConfig(): ReactNode {
     }
     
     function genLabel(station: StationGroup) {
-        const { type, id } = unpack(station.repId);
+        const { type, id } = unpack(station.childRefs[0].id);
         return <label>
             {station.name} (
-            <a target='_blank' href={`https://www.openstreetmap.org/${type}/${id}`}>{station.repId}</a>
+            <a target='_blank' href={`https://www.openstreetmap.org/${type}/${id}`}>{station.childRefs[0].id}</a>
             )
         </label>;
     }
@@ -107,14 +106,14 @@ function shouldShow(
     // total route masters to this station
     const types = new Map<string, number>();
 
-    for (const rm of station.routeMasters.values()) {
+    for (const rm of station.allElementsWithRole('route_master', Relation)) {
         const type = rm.data.tags!.route_master;
         types.set(type, (types.get(type) ?? 0) + 1);
     }
 
     // total unmastered routes to this station
-    for (const r of station.routes.values()) {
-        if (r.parentIds.size > 0) {
+    for (const r of station.allElementsWithRole('route', Relation)) {
+        if (r.parentRefs.length > 0) {
             console.warn(`[station] ${r.id} has parent ids, but is not a route master`);
             continue;
         }
@@ -151,12 +150,12 @@ export function StationMarkers(): ReactNode {
 
             const tempStations = [] as StationGroup[];
             for (const platform of platforms) {
-                let station = tempStations.find(s => s.has(platform));
+                let station = tempStations.find(s => s.has(platform.id));
                 if (!station) {
                     station = new StationGroup();
                     tempStations.push(station);
                 }
-                station.add(platform);
+                station.tryAdd(platform);
             }
             console.log(`[station] ${tempStations.length} stations found`);
 
@@ -168,20 +167,20 @@ export function StationMarkers(): ReactNode {
     function modeString(station: StationGroup): ReactNode {
         const modes = [] as string[];
 
-        if (station.station) {
+        if (station.childRefs[0].role === 'station') {
             modes.push('Station');
         }
 
-        if ([...station.platforms.values()].some(p => p.data.tags?.railway === 'platform')) {
-            const routeStr = [...station.routeMasters.values()]
+        if (station.allElementsWithRole('platform', Element).some(p => p.data.tags?.railway === 'platform')) {
+            const routeStr = station.allElementsWithRole('route_master', Relation)
                 .filter(rm => trainTypes.includes(rm.data.tags!.route_master))
                 .map(r => r.data.tags?.ref)
                 .join(', ');
             modes.push(`Rail (${routeStr})`);
         }
 
-        if ([...station.platforms.values()].some(p => p.data.tags?.highway === 'bus_stop')) {
-            const routeStr = [...station.routeMasters.values()]
+        if (station.allElementsWithRole('platform', Element).some(p => p.data.tags?.highway === 'bus_stop')) {
+            const routeStr = station.allElementsWithRole('route_master', Relation)
                 .filter(rm => busTypes.includes(rm.data.tags!.route_master))
                 .map(r => r.data.tags?.ref)
                 .join(', ');
@@ -196,7 +195,7 @@ export function StationMarkers(): ReactNode {
         for (const v of station.visuals) {
             if (v instanceof Way) {
                 visuals.push(<Polygon key={v.id}
-                    positions={v.children.map(c => [c.lat, c.lon])}
+                    positions={v.childrenOfType(Node).map(c => [c.lat, c.lon])}
                     pathOptions={StationStyle}>
                 </Polygon>);
             }

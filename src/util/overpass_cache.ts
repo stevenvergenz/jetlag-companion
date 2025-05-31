@@ -1,6 +1,4 @@
 import { LatLngTuple } from 'leaflet';
-import * as turf from '@turf/turf';
-import { Feature } from 'geojson';
 
 import { Id, pack, unpack } from '../data/id';
 import { Element, ElementCtor, Node, Relation, Way } from '../data/index';
@@ -128,20 +126,20 @@ async function dbGetById(db: IDBDatabase, ids: Id[]): Promise<QueryResult> {
     const results: QueryResult = new Map();
     for (const eData of data) {
         if (!eData) { continue; }
-        if (eData.type === 'node') {
-            const n = new Node(pack(eData), eData);
-            memCacheId.set(n.id, n);
-            results.set(n.id, n);
+        if (eData.type === 'relation') {
+            const r = new Relation(pack(eData), eData);
+            memCacheId.set(r.id, r);
+            results.set(r.id, r);
         }
         else if (eData.type === 'way') {
             const w = new Way(pack(eData), eData);
             memCacheId.set(w.id, w);
             results.set(w.id, w);
         }
-        else if (eData.type === 'relation') {
-            const r = new Relation(pack(eData), eData);
-            memCacheId.set(r.id, r);
-            results.set(r.id, r);
+        else if (eData.type === 'node') {
+            const n = new Node(pack(eData), eData);
+            memCacheId.set(n.id, n);
+            results.set(n.id, n);
         }
     }
 
@@ -342,12 +340,9 @@ export async function getByTransportTypeAsync<T extends QueryElement>(
 ): Promise<T[]> {
     opts = { ...DefaultOptions, ...opts };
 
-    // note: turf uses longitude/latitude for points, leaflet and overpass uses the opposite
-    const polygon = turf.polygon([bounds.map(p => [p[1], p[0]])]);
-    const bbox = turf.bbox(polygon);
-    const boundsStr = [bbox[1], bbox[0], bbox[3], bbox[2]].join(',');
-
     const db = await dbInit();
+
+    const boundsStr = bounds.flat().join(' ');
 
     let es = await dbGetTransportByBounds(db, boundsStr);
     console.log(`[cache] Found ${es.size} transport elements in cache`);
@@ -360,53 +355,11 @@ export async function getByTransportTypeAsync<T extends QueryElement>(
     }
 
     db.close();
-    console.log(`[load] ${es.size} transport elements pre-poly`);
-
-    es = filterByPoly(es, polygon);
-    console.log(`[load] ${es.size} transport elements post-poly`);
+    console.log(`[load] ${es.size} transport elements`);
 
     return [...es.values()]
         .filter(e => {
             return e?.data.tags?.public_transport === transportType
                 || e?.data.tags?.type === transportType;
         }) as T[];
-}
-
-function filterByPoly(elements: QueryResult, polygon: Feature): QueryResult {
-    const filtered: QueryResult = new Map();
-    const excluded = new Set<Id>();
-
-    function containedByPoly(element?: Element) {
-        if (!element || excluded.has(element.id)) {
-            return false;
-        } else if (filtered.has(element.id)) {
-            return true;
-        } else if (element instanceof Node) {
-            if (turf.booleanContains(polygon, turf.point([element.lon, element.lat]))) {
-                //console.log(`[poly] ${element.id} (${element.data.tags?.public_transport}) contained in poly`);
-                filtered.set(element.id, element);
-                return true;
-            } else {
-                excluded.add(element.id);
-                return false;
-            }
-        } else if (element instanceof Way || element instanceof Relation) {
-            if (element.childRefs.some(ref => containedByPoly(ref.element))) {
-                //console.log(`[poly] ${element.id} (${element.data.tags?.public_transport}) contained in poly`);
-                filtered.set(element.id, element);
-                return true;
-            } else {
-                excluded.add(element.id);
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-
-    for (const e of elements.values()) {
-        containedByPoly(e);
-    }
-
-    return filtered;
 }

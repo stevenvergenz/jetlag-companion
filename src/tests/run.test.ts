@@ -32,12 +32,12 @@ test('run append forward', () => {
     expect(run.lastNodeId).toBe('n:6');
 });
 
-test('run prepend forward', () => {
+test('run prepend forward', async () => {
     setup();
 
     const r = relation(2, [5, 4]);
-    const runs = Run.generateFromRelation(r);
-    checkChildren(r, ['w:5', 'w:4', 'wg:2/0']);
+    const runs = await Run.generateFromRelation(r);
+    checkChildren(r, ['w:5', 'w:4', 'r:-1']);
 
     const run = runs[0];
     expect(run).toBeInstanceOf(Run);

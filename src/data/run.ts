@@ -1,8 +1,8 @@
 import { Relation, Way } from './index';
 import { Id, getSyntheticId, unpack } from './id';
+import { getAsync, memCacheId } from '../util/overpass_cache';
 
 export default class Run extends Relation {
-
     public static readonly forwardRole = 'forward';
     public static readonly reverseRole = 'reverse';
     public readonly role: string;
@@ -71,11 +71,21 @@ export default class Run extends Relation {
         return true;
     }
 
+    public static async generateFromRelation(relation: Relation): Promise<Run[]> {
+        const existingRuns = relation.childrenOfType(Run);
+        if (existingRuns.length > 0) {
+            return existingRuns;
+        }
 
-    public static generateFromRelation(relation: Relation): Run[] {
+        let wayRefs = relation.childRefsOfType(Way);
+        if (wayRefs.length === 0) {
+            await getAsync(relation.childRefsOfType('way').map(ref => ref.id));
+            wayRefs = relation.childRefsOfType(Way);
+        }
+
         const runs: Run[] = [];
 
-        for (const wayRef of relation.childRefsOfType(Way)) {
+        for (const wayRef of wayRefs) {
             const wayEnds = [wayRef.element.firstChild?.id, wayRef.element.lastChild?.id];
             if (wayEnds.some(id => id === undefined)) {
                 continue;
@@ -142,6 +152,10 @@ export default class Run extends Relation {
 
                 junior.orphan();
             }
+        }
+
+        for (const r of runs) {
+            memCacheId.set(r.id, r);
         }
 
         return runs;

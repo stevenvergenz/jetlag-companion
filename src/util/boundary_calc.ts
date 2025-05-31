@@ -1,7 +1,7 @@
 import Flatbush from 'flatbush';
 import { LatLngTuple } from 'leaflet';
 
-import { getAsync, memCacheId } from './overpass_cache';
+import { getAsync } from './overpass_cache';
 import { Id, Relation, Run, Way, Node } from '../data/index';
 
 export const Vec2 = {
@@ -76,12 +76,7 @@ export async function generateBoundaryLoopPath(
 
     await getAsync(ways.flatMap(w => w?.childRefs.map(ref => ref.id) ?? []));
 
-    for (const r of relations) {
-        const runs = Run.generateFromRelation(r);
-        for (const run of runs) {
-            memCacheId.set(run.id, run);
-        }
-    }
+    await Promise.all(relations.map(r => Run.generateFromRelation(r)));
 
     return mergeRelations(relations, excluded, distanceFn);
 }

@@ -116,27 +116,28 @@ export async function requestAsync(ids: Id[]): Promise<QueryResult> {
     return result;
 }
 
-export async function requestTransport(bbox: string): Promise<Id[]> {
+export async function requestTransport(poly: string): Promise<Id[]> {
     // relation[public_transport=stop_area] describes a group of stops
     //   can have members "platform", "stop_position", "station", etc.
     // nw[public_transport=station] is many:many with stop_areas
     // nw[public_transport=platform] describes a transit stop
     // relation[type=route] describes a route variant going to a platform
     // relation[type=route_master] describes a full route with all variants
+    const p = `(poly: "${poly}")`
     const q = `
     (
-        way[public_transport=platform];
-        way[public_transport=station];
+        way[public_transport=platform]${p};
+        way[public_transport=station]${p};
     ) -> .ways;
     (
-        node[public_transport=platform];
-        node[public_transport=station];
-        node(w.ways);
+        node[public_transport=platform]${p};
+        node[public_transport=station]${p};
+        node(w.ways)${p};
         .ways;
-        rel[public_transport=stop_area];
-        rel[type=route];
-        rel[type=route_master];
+        rel[public_transport=stop_area]${p};
+        rel[type=route]${p};
+        rel[type=route_master]${p};
     );`;
-    const map = await query(q, { idOnly: true, bbox });
+    const map = await query(q, { idOnly: true });
     return [...map.keys()];
 }

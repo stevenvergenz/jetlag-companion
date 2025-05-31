@@ -7,7 +7,7 @@ export type IdUnpacked = {
     id: number,
 };
 
-const idRegex = /^(r|w|n):(\d+)(?:\/(\d+))?$/;
+const idRegex = /^(r|w|n):(-?\d+)(?:\/(\d+))?$/;
 const typePrefixMap = new Map<string, OsmElementType>([
     ['r', 'relation'],
     ['w', 'way'],
@@ -27,8 +27,8 @@ export function unpack(id: Id): IdUnpacked {
     }
 
     return {
-        type: typePrefixMap.get(match[2])!,
-        id: parseInt(match[3], 10),
+        type: typePrefixMap.get(match[1])!,
+        id: parseInt(match[2], 10),
     };
 }
 

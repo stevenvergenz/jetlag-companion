@@ -1,7 +1,7 @@
-import { ReactNode, useContext, useEffect, useState } from 'react';
+import { ReactNode, useContext, useState } from 'react';
 
-import { Id, pack, packFrom, unpack, Relation, Way, Run } from './data/index';
-import { getAsync } from './util/overpass_cache';
+import { pack, unpack, Relation, Way, Run } from './data/index';
+import { getAsync, memCacheId } from './util/overpass_cache';
 import { TreeNode } from './util/tree_node';
 import { SharedContext, notExcluded } from './context';
 
@@ -12,8 +12,9 @@ export function BoundaryConfig(): ReactNode {
         save
     } = useContext(SharedContext);
     const [newId, setNewId] = useState('');
+    const [children, setChildren] = useState([] as Relation[]);
 
-    function addRelation() {
+    async function addRelation() {
         if (!newId) {
             return;
         }
@@ -24,11 +25,23 @@ export function BoundaryConfig(): ReactNode {
         }
 
         const id = pack({ type: 'relation', id: numberId });
+        const r = await getAsync([id]);
+        if (!r) {
+            console.error(`Not a real relation id: ${id}`);
+            return;
+        }
+
         if (!boundaryIncluded.has(id)) {
             const newInclude = new Set([...boundaryIncluded, id]);
             setNewId('');
             save({ boundary: { included: newInclude }});
         }
+    }
+
+    if (children.length !== boundaryIncluded.size) {
+        getAsync([...boundaryIncluded]).then(c => {
+            setChildren(c.filter(e => e instanceof Relation));
+        });
     }
 
     return <TreeNode id='boundaries' initiallyOpen={boundaryEditing} onToggle={setBoundaryEditing}>
@@ -41,43 +54,22 @@ export function BoundaryConfig(): ReactNode {
                 <button type='button' onClick={addRelation}>Add</button>
             </div>
         </TreeNode>
-        { [...boundaryIncluded].map(id => <RelationConfig key={`c${id}`} id={id} />) }
+        { children.map(r => <RelationConfig key={`c${r.id}`} relation={r} />) }
     </TreeNode>;
 }
 
 type RelationConfigProps = {
-    id: Id,
+    relation: Relation,
 };
 
-export function RelationConfig({ id }: RelationConfigProps): ReactNode {
+export function RelationConfig({ relation }: RelationConfigProps): ReactNode {
     const {
         boundaryExcluded,
         hovering, setHovering,
         save,
     } = useContext(SharedContext);
     const notBoundaryExcluded = notExcluded(boundaryExcluded);
-
-    const [relation, setRelation] = useState(undefined as Relation | undefined);
-
-    useEffect(() => {
-        let ignore = false;
-        if (!relation || relation.id !== id) {
-            getAsync([id])
-                .then(async ([r]) => {
-                    if (r instanceof Relation && !ignore) {
-                        const wayIds = r.data.members
-                            .flatMap(m => m.type === 'way' ? [packFrom(m)] : []);
-                        console.log('[menu]', wayIds);
-                        await getAsync(wayIds);
-                        console.log('[menu] Ways:', r.children.filter(e => e instanceof Way).length);
-                        r.calcWayGroups();
-                        console.log('[menu] Way groups:', r.wayGroups?.size);
-                        setRelation(r);
-                    }
-                });
-            return () => { ignore = true; };
-        }
-    }, [id, relation]);
+    const [children, setChildren] = useState(relation.childrenOfType(Run));
 
     function enabled() {
         return relation && notBoundaryExcluded(relation);
@@ -109,26 +101,34 @@ export function RelationConfig({ id }: RelationConfigProps): ReactNode {
     }
 
     function hoverEnd() {
-        if (hovering === id) {
+        if (hovering === relation.id) {
             setHovering('');
         }
     }
 
-    return <TreeNode id={id} initiallyOpen={false}
-        onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
+    if (relation.childrenOfType(Way).length < relation.childRefsOfType('way').length
+        || relation.childrenOfType(Run).length === 0
+    ) {
+        Run.generateFromRelation(relation).then(runs => {
+            for (const r of runs) {
+                memCacheId.set(r.id, r);
+            }
+            setChildren(runs);
+        });
+    }
+
+    return <TreeNode id={relation.id} initiallyOpen={false}
+        onMouseEnter={() => setHovering(relation.id)} onMouseLeave={hoverEnd}>
         { genLabel() }
-        { relation?.children
-            .filter(e => e.data.type === 'wayGroup')
-            .map(wg => <WayGroupConfig key={'c' + wg.id} wayGroup={wg as WayGroup} />) }
+        { children.map(run => <RunConfig key={'c' + run.id} run={run} />) }
     </TreeNode>;
 }
 
-
-type WayGroupConfigProps = {
-    wayGroup: WayGroup,
+type RunConfigProps = {
+    run: Run,
 };
 
-export function WayGroupConfig({ wayGroup }: WayGroupConfigProps): ReactNode {
+export function RunConfig({ run }: RunConfigProps): ReactNode {
     const {
         boundaryExcluded,
         hovering, setHovering,
@@ -136,26 +136,18 @@ export function WayGroupConfig({ wayGroup }: WayGroupConfigProps): ReactNode {
     } = useContext(SharedContext);
     const notBoundaryExcluded = notExcluded(boundaryExcluded);
 
-    const [inheritEnabled, setInheritEnabled] = useState(true);
-    const [enabled, setEnabledLocal] = useState(true);
-
-    useEffect(() => {
-        setInheritEnabled([...wayGroup.parentIds.values()].every(notBoundaryExcluded));
-        setEnabledLocal(notBoundaryExcluded(wayGroup));
-    }, [wayGroup, boundaryExcluded, notBoundaryExcluded])
-
     function setEnabled(state: boolean) {
-        if (!wayGroup) { return; }
+        if (!run) { return; }
 
-        const isIncluded = notBoundaryExcluded(wayGroup);
+        const isIncluded = notBoundaryExcluded(run);
         if (state && !isIncluded) {
-            const newExclude = new Set([...boundaryExcluded].filter((id) => id !== wayGroup.id));
+            const newExclude = new Set([...boundaryExcluded].filter((id) => id !== run.id));
             save({
                 boundary: { excluded: newExclude },
             });
         }
         else if (!state && isIncluded) {
-            const newExclude = new Set([...boundaryExcluded, wayGroup.id]);
+            const newExclude = new Set([...boundaryExcluded, run.id]);
             save({
                 boundary: { excluded: newExclude },
             });
@@ -163,53 +155,41 @@ export function WayGroupConfig({ wayGroup }: WayGroupConfigProps): ReactNode {
     }
 
     function hoverEnd() {
-        if (hovering === wayGroup.id) {
+        if (hovering === run.id) {
             setHovering('');
         }
     }
 
-    return <TreeNode id={`c${wayGroup.id}`} initiallyOpen={false}
-        onMouseEnter={() => setHovering(wayGroup.id)} onMouseLeave={hoverEnd}>
+    const inheritEnabled = run.parentRefs.map(r => r.id).every(notBoundaryExcluded);
+    const enabledLocal = notBoundaryExcluded(run);
+
+    return <TreeNode id={`c${run.id}`} initiallyOpen={false}
+        onMouseEnter={() => setHovering(run.id)} onMouseLeave={hoverEnd}>
         <label>
             <input type='checkbox' disabled={!inheritEnabled}
-                checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+                checked={enabledLocal} onChange={e => setEnabled(e.target.checked)} />
             &nbsp;
-            {wayGroup.name} ({wayGroup.id})
+            {run.name} ({run.id})
         </label>
-        { wayGroup.children.map(w => <WayConfig key={`c${w.id}`} id={w.id} />) }
+        { run.childrenOfType(Way).map(w => <WayConfig key={`c${w.id}`} way={w} />) }
     </TreeNode>;
 }
 
 type WayConfigProps = {
-    id: Id,
+    way: Way,
 };
 
-export function WayConfig({ id }: WayConfigProps): ReactNode {
+export function WayConfig({ way }: WayConfigProps): ReactNode {
     const {
         boundaryExcluded,
         hovering, setHovering,
         save,
     } = useContext(SharedContext);
     const notBoundaryExcluded = notExcluded(boundaryExcluded);
-    
-    const [way, setWay] = useState(undefined as Way | undefined);
-    const [inheritEnabled, setInheritEnabled] = useState(true);
-    const [enabled, setEnabledLocal] = useState(true);
 
-    useEffect(() => {
-        if (!way || way.id !== id) {
-            getAsync([id]).then(([w]) => setWay(w as Way));
-        }
-    }, [id, way]);
-
-    useEffect(() => {
-        if (way) {
-            setInheritEnabled(notBoundaryExcluded(way)
-                && way.parents.every(notBoundaryExcluded));
-            setEnabledLocal(notBoundaryExcluded(way));
-        }
-    }, [way, boundaryExcluded, notBoundaryExcluded])
-
+    const inheritEnabled = notBoundaryExcluded(way)
+        && way.parentsOfType(Run).every(notBoundaryExcluded);
+    const enabledLocal = notBoundaryExcluded(way);
 
     function setEnabled(state: boolean) {
         if (!way) { return }
@@ -233,7 +213,7 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
         if (way) {
             return <label>
                 <input type='checkbox' disabled={!inheritEnabled}
-                    checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+                    checked={enabledLocal} onChange={e => setEnabled(e.target.checked)} />
                 &nbsp;
                 {way.name} (
                 <a target='_blank' href={`https://www.openstreetmap.org/way/${unpack(way.id).id}`}>{way.id}</a>
@@ -245,14 +225,14 @@ export function WayConfig({ id }: WayConfigProps): ReactNode {
     }
 
     function hoverEnd() {
-        if (hovering === id) {
+        if (hovering === way.id) {
             setHovering('');
         }
     }
 
     if (way) {
         return <TreeNode id={way.id} initiallyOpen={true}
-            onMouseEnter={() => setHovering(id)} onMouseLeave={hoverEnd}>
+            onMouseEnter={() => setHovering(way.id)} onMouseLeave={hoverEnd}>
             { genLabel() }
         </TreeNode>;
     }
