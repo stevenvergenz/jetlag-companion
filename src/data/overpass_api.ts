@@ -21,7 +21,7 @@ export type OsmRelation = OsmCommon & {
     members: OsmMember[],
 };
 
-type OsmMember = {
+export type OsmMember = {
     type: OsmElementType,
     ref: number,
     role: string,

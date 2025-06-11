@@ -1,5 +1,5 @@
 import { LatLngTuple } from 'leaflet';
-import { Relation, Way, Node } from '../data/index';
+import { Element, Relation, Way, Node, OsmMember } from '../data/index';
 import { memCacheId } from '../util/overpass_cache';
 import { pack, resetSyntheticIdCounter } from '../data/id';
 
@@ -40,12 +40,45 @@ export function setup(): void {
     way(800, [11, 10]); way(900, [13, 12, 11]); way(1000, [14, 13]);
     way(1100, [15, 11]); way(1200, [16, 13]);
 
+    for (const n of nodes(4, 6, 11, 13)) {
+        n.data.tags = {
+            type: 'public_transport',
+            public_transport: 'platform',
+        }
+    }
+
+    const sa1 = relation(1, [nodes(4, 6), 'platform']);
+    sa1.data.tags = {
+        public_transport: 'stop_area',
+    };
+
+    const sa2 = relation(2, [nodes(11, 13), 'platform']);
+    sa2.data.tags = {
+        public_transport: 'stop_area',
+    };
+
     function layout(ids: number[], start: LatLngTuple, offset: LatLngTuple): Node[] {
         return ids.map((id, i) => node(id, start[0] + offset[0] * i, start[1] + offset[1] * i));
     }
 }
 
-export function relation(id: number, members: number[]): Relation {
+export function relation(id: number, ...members: [Element[], string][]): Relation {
+    const r = new Relation(pack({ type: 'relation', id }), {
+        type: 'relation',
+        id,
+        members: members.flatMap(([elements, role]) => {
+            return elements.map(element => ({
+                type: element.data.type,
+                ref: element.data.id,
+                role,
+            } satisfies OsmMember));
+        }),
+    });
+    memCacheId.set(r.id, r);
+    return r;
+}
+
+export function relationOfWays(id: number, members: number[]): Relation {
     const r = new Relation(pack({ type: 'relation', id }), {
         type: 'relation',
         id,

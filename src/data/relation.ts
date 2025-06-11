@@ -66,6 +66,7 @@ export default class Relation extends Element {
 
     protected addChild(child: Element, role?: string, index?: number) {
         if (this.childRefs.find(ref => ref.id === child.id && (!role || ref.role === role))) {
+            console.warn(`Relation ${this.id} already has child ${child.id} with role ${role}`);
             return;
         }
 

@@ -167,13 +167,14 @@ export class Element {
             element: child,
         });
 
-        const backRef = child.parentRefs.find(ref => ref.id === this.id);
+        let backRef = child.parentRefs.find(ref => ref.id === this.id);
         if (!backRef || backRef.role !== role) {
-            child.parentRefs.push({
+            backRef = {
                 id: this.id,
                 role,
                 element: this,
-            });
+            };
+            child.parentRefs.push(backRef);
         }
     }
 

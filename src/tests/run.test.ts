@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { setup, relation } from './test_common';
+import { setup, relationOfWays } from './test_common';
 import { Element, Id, Run } from '../data/index';
 
 function checkChildren(e: Element, ids: Id[]) {
@@ -15,7 +15,7 @@ function checkParents(e: Element, ids: Id[]) {
 test('run append forward', () => {
     setup();
 
-    const r = relation(1, [3, 4]);
+    const r = relationOfWays(1, [3, 4]);
     Run.generateFromRelation(r);
     checkChildren(r, ['w:3', 'w:4', 'r:-1']);
 
@@ -35,7 +35,7 @@ test('run append forward', () => {
 test('run prepend forward', async () => {
     setup();
 
-    const r = relation(2, [5, 4]);
+    const r = relationOfWays(2, [5, 4]);
     const runs = await Run.generateFromRelation(r);
     checkChildren(r, ['w:5', 'w:4', 'r:-1']);
 

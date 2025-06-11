@@ -99,6 +99,7 @@ export default class Run extends Relation {
                 const r = new Run(wayRef.role!);
                 r.addParent(relation, 'run');
                 r.addChild(wayRef.element, Run.forwardRole);
+                runs.push(r);
                 continue;
             }
 

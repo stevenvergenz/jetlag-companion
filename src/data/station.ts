@@ -1,13 +1,9 @@
-import { getSyntheticId, unpack } from './id';
-import { TransportType } from './element';
-import Relation from './relation';
-import Way from './way';
-import Node from './node';
+import { Relation, Way, Node, getSyntheticId, unpack, TransportType } from './index';
 
 export default class Station extends Relation {
-    private _typeRanges = [0, 0, 0, 0, 0];
+    private _typeRanges = [0, 0, 0, 0];
 
-    public constructor() {
+    public constructor(platform: Way | Node) {
         const id = getSyntheticId('relation');
         const uid = unpack(id);
         super(id, { 
@@ -18,6 +14,18 @@ export default class Station extends Relation {
             },
             members: [],
         });
+
+        this.add(platform);
+    }
+
+    public get name(): string {
+        if (this.stopAreaEnd < this.stationEnd) {
+            return this.childRefs[this.stopAreaEnd + 1].element!.name;
+        } else if (this.platformEnd > 0) {
+            return this.childRefs[0].element!.name;
+        } else {
+            return super.name;
+        }
     }
 
     public get visuals(): (Way | Node)[] {
@@ -30,140 +38,108 @@ export default class Station extends Relation {
         }
     }
 
+    /** @returns true if the platform is now part of the station */
     public tryAdd(platform: Way | Node): boolean {
-        // add the platform
+        // validate the platform itself
 
-        if (this.has(platform.id)) {
+        if (platform.transportType !== TransportType.Platform) {
             return false;
         }
 
+        if (this.has(platform.id)) {
+            return true;
+        }
+
+        // check if stop areas are in common
+
+        const stopAreas = platform.parentRefs.flatMap(pRef => {
+            const match = pRef.element instanceof Relation
+                && pRef.role === 'platform'
+                && pRef.element.transportType === TransportType.StopArea;
+            return match ? [pRef.element as Relation] : [];
+        });
+
+        if (stopAreas.some(sa => this.has(sa.id))) {
+            this.add(platform);
+            return true;
+        }
+
+        // check if stations are in common
+
+        const stations = stopAreas.flatMap(stopArea => {
+            return stopArea.childRefs.flatMap(cRef => {
+                const match = (cRef.element instanceof Way || cRef.element instanceof Node)
+                    && cRef.role === ''
+                    && cRef.element.transportType === TransportType.Station;
+                return match ? [cRef.element as Way | Node] : [];
+            });
+        });
+
+        if (stations.some(s => this.has(s.id))) {
+            this.add(platform);
+            return true;
+        }
+
+        return false;
+    }
+
+    private add(platform: Way | Node) {
         this.addChild(platform, 'platform', this.platformEnd++);
 
         // add any stop areas (above platforms)
-
-        const directStopAreas = platform.parentRefs.flatMap(ref => {
-            if (!this.has(ref.id)
-                && ref.element?.transportType === TransportType.StopArea) {
-                return [ref.element];
-            } else {
-                return [];
-            }
+        const stopAreas = platform.parentRefs.flatMap(pRef => {
+            const matches = pRef.element instanceof Relation
+                && pRef.role === 'platform' 
+                && pRef.element.transportType === TransportType.StopArea
+                && !this.has(pRef.id);
+            return matches ? [pRef.element as Relation] : [];
         });
 
-        if (directStopAreas.length === 0) {
-            return true;
-        }
-
-        for (const stopArea of directStopAreas) {
-            this.addChild(stopArea, 'stop_area', this.stopAreaEnd++);
+        for (const sa of stopAreas) {
+            this.addChild(sa, 'stop_area', this.stopAreaEnd++);
         }
 
         // add any stations (below stop areas)
-
-        const stations = directStopAreas.flatMap(sa => {
-            return sa.childRefs.flatMap(ref => {
-                if (!this.has(ref.id)
-                    && ref.element?.transportType === TransportType.Station) {
-                    return [ref.element];
-                } else {
-                    return [];
-                }
+        const stations = stopAreas.flatMap(sa => {
+            return sa.childRefs.flatMap(cRef => {
+                const matches = (cRef.element instanceof Way || cRef.element instanceof Node)
+                    && cRef.role === ''
+                    && cRef.element.transportType === TransportType.Station
+                    && !this.has(cRef.id);
+                return matches ? [cRef.element as Way | Node] : [];
             });
         });
 
-        if (stations.length === 0) {
-            return true;
+        for (const s of stations) {
+            this.addChild(s, 'station', this.stationEnd++);
         }
 
-        for (const station of stations) {
-            this.addChild(station, 'station', this.stationEnd++);
-        }
-
-        // add any additional stop areas (above stations)
-
-        const indirectStopAreas = stations.flatMap(s => {
-            return s.parentRefs.flatMap(ref => {
-                if (!this.has(ref.id)
-                    && ref.element?.transportType === TransportType.StopArea) {
-                    return [ref.element];
-                } else {
-                    return [];
-                }
-            });
+        // add any routes that go through the platform
+        const routes = platform.parentRefs.flatMap(pRef => {
+            const matches = pRef.element instanceof Relation
+                && pRef.role === 'platform'
+                && pRef.element.transportType === TransportType.Route
+                && !this.has(pRef.id);
+            return matches ? [pRef.element as Relation] : [];
         });
-
-        if (indirectStopAreas.length === 0) {
-            return true;
-        }
-
-        for (const stopArea of indirectStopAreas) {
-            this.addChild(stopArea, 'stop_area', this.stopAreaEnd++);
-        }
-
-        // add any additional platforms (below stop areas)
-
-        const indirectPlatforms = indirectStopAreas.flatMap(sa => {
-            return sa.childRefs.flatMap(ref => {
-                if (!this.has(ref.id)
-                    && ref.element?.transportType === TransportType.Platform) {
-                    return [ref.element];
-                } else {
-                    return [];
-                }
-            });
-        });
-
-        if (indirectPlatforms.length === 0) {
-            return true;
-        }
-
-        for (const ip of indirectPlatforms) {
-            this.addChild(ip, 'platform', this.platformEnd++);
-        }
-
-        // routes
-
-        const routes = [platform, ...indirectPlatforms].flatMap(p => {
-            return p.parentRefs.flatMap(ref => {
-                if (!this.has(ref.id)
-                    && ref.element?.transportType === TransportType.Route) {
-                    return [ref.element];
-                } else {
-                    return [];
-                }
-            });
-        });
-
-        if (routes.length === 0) {
-            return true;
-        }
 
         for (const route of routes) {
             this.addChild(route, 'route', this.routeEnd++);
         }
 
-        // route masters
-
-        const masters = routes.flatMap(r => {
-            return r.parentRefs.flatMap(ref => {
-                if (!this.has(ref.id)
-                    && ref.element?.transportType === TransportType.RouteMaster) {
-                    return [ref.element];
-                } else {
-                    return [];
-                }
+        // add any route masters for the added routes
+        const routeMasters = routes.flatMap(route => {
+            return route.parentRefs.flatMap(pRef => {
+                const matches = pRef.element instanceof Relation
+                    && pRef.element.transportType === TransportType.RouteMaster
+                    && !this.has(pRef.id);
+                return matches ? [pRef.element as Relation] : [];
             });
         });
 
-        if (masters.length === 0) {
-            return true;
+        for (const routeMaster of routeMasters) {
+            this.addChild(routeMaster, 'route_master', this.childRefs.length);
         }
-
-        for (const master of masters) {
-            this.addChild(master, 'route_master');
-        }
-
-        return true;
     }
 
     private extendRange(index: number) {
