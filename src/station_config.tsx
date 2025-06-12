@@ -215,11 +215,16 @@ export function StationMarkers(): ReactNode {
                 </Polygon>);
             }
             else if (v instanceof Node) {
-                visuals.push(<CircleMarker key={v.id}
-                    center={[v.lat, v.lon]}
-                    radius={5}
-                    pathOptions={StationStyle}>
-                </CircleMarker>);
+                const circle = 
+                    <CircleMarker key={v.id}
+                        center={[v.lat, v.lon]}
+                        radius={5}
+                        
+                        pathOptions={hovering === station.id ? HoverStyle : StationStyle}
+                        eventHandlers={{click: () => console.log(station)}}>
+                    </CircleMarker>;
+
+                visuals.push(circle);
             }
         }
         

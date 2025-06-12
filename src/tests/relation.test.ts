@@ -1,10 +1,28 @@
 import { expect, test } from 'vitest';
-import { setup, nodes, ways } from './test_common';
-import { Element, Node, Way, getSyntheticId, Id, unpack, OsmElement } from '../data/index';
+import { setup, relations } from './test_common';
 
 test('has', () => {
     setup();
 
-    const [w] = ways(1);
-    expect(w.has('n:1')).toBeTruthy();
+    const [r] = relations(1);
+    expect(r.has('n:4')).toBe(true);
+    expect(r.has('n:5')).toBe(false);
+});
+
+test('firstElementWithRole', () => {
+    setup();
+
+    const [r] = relations(1);
+    expect(r.firstElementWithRole('platform'))
+        .toMatchObject(expect.objectContaining({ id: 'n:4'}));
+});
+
+test('allElementsWithRole', () => {
+    setup();
+
+    const [r] = relations(1);
+    expect(r.allElementsWithRole('platform')).toMatchObject([
+        expect.objectContaining({ id: 'n:4' }),
+        expect.objectContaining({ id: 'n:6' }),
+    ]);
 });

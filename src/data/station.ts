@@ -149,10 +149,11 @@ export default class Station extends Relation {
         ];
     }
 
-    private get platformEnd() {
+
+    private get stationEnd() {
         return this._typeRanges[0];
     }
-    private set platformEnd(_: number) {
+    private set stationEnd(_: number) {
         this.extendRange(0);
     }
 
@@ -163,10 +164,10 @@ export default class Station extends Relation {
         this.extendRange(1);
     }
 
-    private get stationEnd() {
+    private get platformEnd() {
         return this._typeRanges[2];
     }
-    private set stationEnd(_: number) {
+    private set platformEnd(_: number) {
         this.extendRange(2);
     }
 

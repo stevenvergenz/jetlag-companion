@@ -1,5 +1,5 @@
 import { Element, ElementRef, ElementCtor } from './element';
-import { OsmElement, OsmElementType, OsmRelation } from './overpass_api';
+import { OsmElement, OsmRelation } from './overpass_api';
 import { Id, packFrom, unpack } from './id';
 
 export default class Relation extends Element {
@@ -24,26 +24,6 @@ export default class Relation extends Element {
 
     public has(id: Id): boolean {
         return this.childRefs.findIndex(ref => ref.id === id) >= 0;
-    }
-
-    public roleOf(id: Id): string | undefined {
-        const ref = this.childRefs.find(ref => ref.id === id);
-        return ref?.role;
-    }
-
-    public firstIdWithRole(role: string, type?: OsmElementType): Id | undefined {
-        for (const m of this.data.members) {
-            if (m.role === role && (!type || m.type == type)) {
-                return packFrom(m);
-            }
-        }
-        return undefined;
-    }
-
-    public allIdsWithRole(role: string, type?: OsmElementType): Id[] {
-        return this.data.members
-            .filter(m => m.role === role && (!type || m.type == type))
-            .map(m => packFrom(m));
     }
 
     public firstElementWithRole<T extends Element, U extends OsmElement>(role: string, t?: ElementCtor<T, U>): T | undefined {
