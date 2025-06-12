@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { setup, nodes } from './test_common';
-import { Element, getSyntheticId, Id, unpack, OsmElement } from '../data/index';
+import { setup, nodes, ways } from './test_common';
+import { Element, Node, Way, getSyntheticId, Id, unpack, OsmElement } from '../data/index';
 
 class FakeElement extends Element {
     public constructor(id: Id, data: OsmElement) {
@@ -55,4 +55,81 @@ test('addParent', () => {
     expect(childRef).toBeTruthy();
     expect(childRef?.role).toEqual(e.parentRefs[0].role);
     expect(childRef?.element).toMatchObject(e);
+});
+
+test('childRefsOfType (typed))', () => {
+    setup();
+
+    const [w] = ways(4);
+    expect(w.childRefsOfType(Node)).toMatchObject([
+        { id: 'n:4', element: expect.objectContaining({ id: 'n:4' }) },
+        { id: 'n:5', element: expect.objectContaining({ id: 'n:5' }) },
+        { id: 'n:6', element: expect.objectContaining({ id: 'n:6' }) },
+    ]);
+
+    expect(w.childRefsOfType(Way)).toHaveLength(0);
+});
+
+test('childRefsOfType (untyped))', () => {
+    setup();
+
+    const [w] = ways(4);
+    expect(w.childRefsOfType('node')).toMatchObject([
+        { id: 'n:4', element: expect.objectContaining({ id: 'n:4' }) },
+        { id: 'n:5', element: expect.objectContaining({ id: 'n:5' }) },
+        { id: 'n:6', element: expect.objectContaining({ id: 'n:6' }) },
+    ]);
+
+    expect(w.childRefsOfType('way')).toHaveLength(0);
+});
+
+test('parentRefsOfType (typed))', () => {
+    setup();
+
+    const [n] = nodes(5);
+    expect(n.parentRefsOfType(Way)).toMatchObject([
+        { id: 'w:4', element: expect.objectContaining({ id: 'w:4' }) },
+        { id: 'w:400', element: expect.objectContaining({ id: 'w:400' }) },
+    ]);
+
+    expect(n.parentRefsOfType(Node)).toHaveLength(0);
+});
+
+test('parentRefsOfType (untyped)', () => {
+    setup();
+
+    const [n] = nodes(5);
+    expect(n.parentRefsOfType('way')).toMatchObject([
+        { id: 'w:4', element: expect.objectContaining({ id: 'w:4' }) },
+        { id: 'w:400', element: expect.objectContaining({ id: 'w:400' }) },
+    ]);
+
+    expect(n.parentRefsOfType('node')).toHaveLength(0);
+});
+
+test('childrenOfType', () => {
+    setup();
+
+    const [w] = ways(4);
+    expect(w.childrenOfType(Node)).toMatchObject([
+        expect.objectContaining({ id: 'n:4' }),
+        expect.objectContaining({ id: 'n:5' }),
+        expect.objectContaining({ id: 'n:6' }),
+    ]);
+
+    expect(w.childrenOfType(Way)).toHaveLength(0);
+});
+
+
+
+test('parentsOfType', () => {
+    setup();
+
+    const [n] = nodes(5);
+    expect(n.parentsOfType(Way)).toMatchObject([
+        expect.objectContaining({ id: 'w:4' }),
+        expect.objectContaining({ id: 'w:400' }),
+    ]);
+
+    expect(n.parentsOfType(Node)).toHaveLength(0);
 });
