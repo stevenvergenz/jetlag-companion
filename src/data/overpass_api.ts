@@ -123,7 +123,7 @@ export async function requestTransport(poly: string): Promise<Id[]> {
     // nw[public_transport=platform] describes a transit stop
     // relation[type=route] describes a route variant going to a platform
     // relation[type=route_master] describes a full route with all variants
-    const p = `(poly: "${poly}")`
+    const p = `(poly:"${poly}")`
     const q = `
     (
         way[public_transport=platform]${p};
