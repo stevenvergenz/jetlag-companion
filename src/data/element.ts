@@ -227,10 +227,22 @@ export class Element {
         const parentIds = Element.interests.get(this.id);
         if (parentIds) {
             for (const parentId of parentIds) {
-                const p = get(parentId, Element);
-                const ref = p?.childRefs.find(r => r.id === this.id);
-                if (ref) {
-                    ref.element = this;
+                const parent = get(parentId, Element);
+                const childRef = parent?.childRefs.find(r => r.id === this.id);
+                const parentRef = this.parentRefs.find(r => r.id === parentId);
+
+                if (parentRef) {
+                    parentRef.element = parent;
+                } else {
+                    this.parentRefs.push({
+                        id: parentId,
+                        role: childRef?.role,
+                        element: parent,
+                    });
+                }
+
+                if (childRef) {
+                    childRef.element = this;
                     parentIds.delete(parentId);
                 }
             }

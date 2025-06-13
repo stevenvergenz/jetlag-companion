@@ -1,7 +1,12 @@
 import { Relation, Way, Node, getSyntheticId, unpack, TransportType } from './index';
+import { memCacheId } from '../util/overpass_cache';
+import { LatLngTuple } from 'leaflet';
+
+const busTypes = ['bus', 'trolleybus', 'tram'];
+const trainTypes = ['train', 'subway', 'monorail', 'light_rail'];
 
 export default class Station extends Relation {
-    private _typeRanges = [0, 0, 0, 0];
+    private _typeRanges = [0, 0, 0, 0, 0];
 
     public constructor(platform: Way | Node) {
         const id = getSyntheticId('relation');
@@ -28,20 +33,95 @@ export default class Station extends Relation {
         }
     }
 
-    public get visuals(): (Way | Node)[] {
-        const s = this.firstElementWithRole('station', Node);
-        if (s) {
-            return [s];
+    private _visual: Node | undefined;
+    public get visual(): Node {
+        if (this._visual) {
+            return this._visual;
         }
-        else {
-            return this.allElementsWithRole('platform') as (Way | Node)[];
+
+        const osmStation = this.firstElementWithRole('station');
+        if (osmStation instanceof Node) {
+            this._visual = osmStation;
+            return this._visual;
         }
+        
+        let center: LatLngTuple;
+        if (osmStation instanceof Way) {
+            center = osmStation.center;
+        } else {
+            const platforms = this.allElementsWithRole('platform');
+            let latSum = 0, lonSum = 0;
+            for (const platform of platforms) {
+                if (platform instanceof Node) {
+                    latSum += platform.lat;
+                    lonSum += platform.lon;
+                } else if (platform instanceof Way) {
+                    const center = platform.center;
+                    latSum += center[0];
+                    lonSum += center[1];
+                }
+            }
+            center = [latSum / platforms.length, lonSum / platforms.length];
+        }
+
+        const id = getSyntheticId('node');
+        this._visual = new Node(id, {
+            type: 'node',
+            id: unpack(id).id,
+            lat: center[0],
+            lon: center[1],
+        });
+        memCacheId.set(id, this._visual);
+        this.addChild(this._visual, 'visual', this.childRefs.length);
+
+        return this._visual;
+    }
+
+    private _connections: Map<string, Set<string>> | undefined;
+    public get connections(): Map<string, Set<string>> {
+        if (this._connections) {
+            return this._connections;
+        }
+
+        // total route masters to this station
+        const types = new Map<string, Set<string>>();
+    
+        for (const rm of this.allElementsWithRole('route_master', Relation)) {
+            const type = rm.data.tags!.route_master;
+            const routes = types.get(type) ?? new Set<string>();
+            routes.add(rm.data.tags?.ref ?? rm.data.tags?.name ?? 'unknown');
+            types.set(type, routes);
+        }
+    
+        // total unmastered routes to this station
+        for (const r of this.allElementsWithRole('route', Relation)
+            .filter(r => r.parentRefs.some(pRef => pRef.role === 'route_master'))
+        ) {
+            const type = r.data.tags!.route;
+            const routes = types.get(type) ?? new Set<string>();
+            routes.add(r.data.tags?.ref ?? r.data.tags?.name ?? 'unknown');
+            types.set(type, routes);
+        }
+    
+        this._connections = types;
+        return this._connections;
+    }
+
+    public shouldShow(
+        { busRouteThreshold, trainRouteThreshold }: { busRouteThreshold: number, trainRouteThreshold: number },
+    ): boolean {
+        const otherTypes = [...this.connections.keys()].filter(t => !busTypes.includes(t) && !trainTypes.includes(t));
+    
+        return busRouteThreshold > 0 && busRouteThreshold <=
+            busTypes.map(t => this.connections.get(t)?.size ?? 0).reduce((a, b) => a + b)
+        || trainRouteThreshold > 0 && trainRouteThreshold <=
+            trainTypes.map(t => this.connections.get(t)?.size ?? 0).reduce((a, b) => a + b)
+        || otherTypes.length > 0;
     }
 
     /** @returns true if the platform is now part of the station */
     public tryAdd(platform: Way | Node): boolean {
         // validate the platform itself
-
         if (platform.transportType !== TransportType.Platform) {
             return false;
         }
@@ -51,7 +131,6 @@ export default class Station extends Relation {
         }
 
         // check if stop areas are in common
-
         const stopAreas = platform.parentRefs.flatMap(pRef => {
             const match = pRef.element instanceof Relation
                 && pRef.role === 'platform'
@@ -65,7 +144,6 @@ export default class Station extends Relation {
         }
 
         // check if stations are in common
-
         const stations = stopAreas.flatMap(stopArea => {
             return stopArea.childRefs.flatMap(cRef => {
                 const match = (cRef.element instanceof Way || cRef.element instanceof Node)
@@ -138,7 +216,7 @@ export default class Station extends Relation {
         });
 
         for (const routeMaster of routeMasters) {
-            this.addChild(routeMaster, 'route_master', this.childRefs.length);
+            this.addChild(routeMaster, 'route_master', this.routeMasterEnd++);
         }
     }
 
@@ -176,5 +254,12 @@ export default class Station extends Relation {
     }
     private set routeEnd(_: number) {
         this.extendRange(3);
+    }
+
+    private get routeMasterEnd() {
+        return this._typeRanges[4];
+    }
+    private set routeMasterEnd(_: number) {
+        this.extendRange(4);
     }
 }

@@ -113,7 +113,7 @@ async function dbPutAll(db: IDBDatabase, es: QueryResult, bounds?: string): Prom
 }
 
 async function dbGetById(db: IDBDatabase, ids: Id[]): Promise<QueryResult> {
-    console.log(`[cache] Fetching ${ids.join(', ')}`);
+    //console.log(`[cache] Fetching ${ids.join(', ')}`);
     const tx = db.transaction('elements', 'readonly');
     const store = tx.objectStore('elements');
 
