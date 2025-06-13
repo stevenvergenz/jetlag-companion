@@ -132,11 +132,22 @@ export async function requestTransport(poly: string): Promise<Id[]> {
     (
         node[public_transport=platform]${p};
         node[public_transport=station]${p};
-        node(w.ways)${p};
+    ) -> .nodes;
+    (
+        rel(bn.nodes)[public_transport=stop_area];
+        rel(bw.ways)[public_transport=stop_area];
+    ) -> .stop_areas;
+    (
+        rel(bn.nodes)[type=route];
+        rel(bw.ways)[type=route];
+    ) -> .routes;
+    (
         .ways;
-        rel[public_transport=stop_area]${p};
-        rel[type=route]${p};
-        rel[type=route_master]${p};
+        .nodes;
+        .stop_areas;
+        .routes;
+        rel(br.routes)[type=route_master];
+        node(w.ways)${p};
     );`;
     const map = await query(q, { idOnly: true });
     return [...map.keys()];
