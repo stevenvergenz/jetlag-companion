@@ -1,4 +1,4 @@
-import { LatLngTuple } from 'leaflet';
+import { Position } from 'geojson';
 
 import { Id, pack, unpack } from '../data/id';
 import { Element, ElementCtor, Node, Relation, Way } from '../data/index';
@@ -334,7 +334,7 @@ export function get<T extends Element, U extends OsmElement>(id: Id, t: ElementC
 }
 
 export async function getByTransportTypeAsync<T extends QueryElement>(
-    bounds: LatLngTuple[], 
+    bounds: Position[], 
     transportType: TransportType, 
     opts?: Partial<GetOptions>,
 ): Promise<T[]> {

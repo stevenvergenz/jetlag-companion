@@ -7,7 +7,7 @@ import { getByTransportTypeAsync, memCacheId } from './util/overpass_cache';
 
 export function StationConfig(): ReactNode {
     const {
-        boundaryPath,
+        boundaryPoints,
         showStations,
         busRouteThreshold,
         trainRouteThreshold,
@@ -51,13 +51,13 @@ export function StationConfig(): ReactNode {
     }
 
     async function calcStations() {
-        if (!boundaryPath || boundaryPath.length < 2 || calcStarted) {
+        if (!boundaryPoints || boundaryPoints.length < 2 || calcStarted) {
             return;
         }
 
         setCalcStarted(true);
         const platforms = await getByTransportTypeAsync<Way | Node>(
-            boundaryPath, 
+            boundaryPoints, 
             'platform',
             { request: true },
         );

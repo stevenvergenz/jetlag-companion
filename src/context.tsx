@@ -1,28 +1,20 @@
-import { createContext, ReactNode, useState } from 'react';
-import { LatLngTuple } from 'leaflet';
+import React, { createContext, ReactNode, useState } from 'react';
+import { Position } from 'geojson';
 
 import { Id, Element, Station } from './data/index';
 import { load, save, PartialConfig } from './config';
 
 type ContextContent = {
-    //boundaryIncluded: Set<Id>,
-    //setBoundaryIncluded: React.Dispatch<React.SetStateAction<Set<Id>>>,
-    //boundaryExcluded: Set<Id>,
-    //setBoundaryExcluded: React.Dispatch<React.SetStateAction<Set<Id>>>,
-    //notBoundaryExcluded: (id: Element | Id) => boolean,
-    boundaryPath: LatLngTuple[] | undefined,
-    setBoundaryPath: React.Dispatch<React.SetStateAction<LatLngTuple[] | undefined>>,
+    boundaryPoints: Position[],
+    setBoundaryPoints: React.Dispatch<React.SetStateAction<Position[]>>,
     boundaryEditing: boolean,
     setBoundaryEditing: React.Dispatch<React.SetStateAction<boolean>>,
     boundaryErrors: Set<Id>,
     setBoundaryErrors: React.Dispatch<React.SetStateAction<Set<Id>>>,
 
     showStations: boolean,
-    //setShowStations: React.Dispatch<React.SetStateAction<boolean>>,
     busRouteThreshold: number,
-    //setBusRouteThreshold: React.Dispatch<React.SetStateAction<number>>,
     trainRouteThreshold: number,
-    //setTrainRouteThreshold: React.Dispatch<React.SetStateAction<number>>,
     stations: Station[],
     setStations: React.Dispatch<React.SetStateAction<Station[]>>,
 
@@ -34,24 +26,16 @@ type ContextContent = {
 
 const config = load();
 const dummyContent: ContextContent = {
-    //boundaryIncluded: config.boundary.included,
-    //setBoundaryIncluded: () => {},
-    //boundaryExcluded: config.boundary.excluded,
-    //setBoundaryExcluded: () => {},
-    //notBoundaryExcluded: () => true,
-    boundaryPath: undefined,
-    setBoundaryPath: () => {},
+    boundaryPoints: [],
+    setBoundaryPoints: () => {},
     boundaryEditing: false,
     setBoundaryEditing: () => {},
     boundaryErrors: new Set(),
     setBoundaryErrors: () => {},
 
     showStations: config.stations.show,
-    //setShowStations: () => {},
     busRouteThreshold: 2,
-    //setBusRouteThreshold: () => {},
     trainRouteThreshold: 1,
-    //setTrainRouteThreshold: () => {},
     stations: [],
     setStations: () => {},
 
@@ -66,7 +50,7 @@ export function notExcluded(excluded: Set<Id>) {
     };
 }
 
-const b: LatLngTuple[] = [
+const b: Position[] = [
     [47.599258, -122.432753],
     [47.59631121360593, -122.13657886784392],
     [47.356092023685264, -122.13512227280195],
@@ -77,9 +61,7 @@ const b: LatLngTuple[] = [
 export const SharedContext = createContext(dummyContent);
 
 export function ContextProvider({ children }: { children: ReactNode }) {
-    //const [boundaryIncluded, setBoundaryIncluded] = useState(config.boundary.included);
-    //const [boundaryExcluded, setBoundaryExcluded] = useState(config.boundary.excluded);
-    const [boundaryPath, setBoundaryPath] = useState(b as LatLngTuple[] | undefined);
+    const [boundaryPoints, setBoundaryPoints] = useState(b as Position[]);
     const [boundaryEditing, setBoundaryEditing] = useState(false);
     const [boundaryErrors, setBoundaryErrors] = useState(new Set<Id>());
 
@@ -92,38 +74,20 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
 
     const context: ContextContent = {
-        //boundaryIncluded, //setBoundaryIncluded,
-        //boundaryExcluded, //setBoundaryExcluded,
-        //notBoundaryExcluded,
-        boundaryPath, setBoundaryPath,
+        boundaryPoints, setBoundaryPoints,
         boundaryEditing, setBoundaryEditing,
         boundaryErrors, setBoundaryErrors,
 
-        showStations, //setShowStations,
-        busRouteThreshold, //setBusRouteThreshold,
-        trainRouteThreshold, //setTrainRouteThreshold,
+        showStations,
+        busRouteThreshold,
+        trainRouteThreshold,
         stations, setStations,
 
         hovering, setHovering,
         save: (config: PartialConfig) => {
-            /*if (config.boundary?.included ?? config.boundary?.excluded) {
-                const newInclude = new Set(config.boundary?.included ?? boundaryIncluded);
-                const newExclude = new Set(config.boundary?.excluded ?? boundaryExcluded);
-    
-                for (const id of newInclude) {
-                    if (newExclude.has(id)) {
-                        newInclude.delete(id);
-                        newExclude.delete(id);
-                    }
-                }
-    
-                setBoundaryIncluded(newInclude);
-                setBoundaryExcluded(newExclude);
-
-                config.boundary.included = newInclude;
-                config.boundary.excluded = newExclude;
-            }*/
-
+            if (config.boundary?.points !== undefined) {
+                setBoundaryPoints(config.boundary.points);
+            }
             if (config.stations?.show !== undefined) {
                 setShowStations(config.stations.show);
             }
@@ -135,10 +99,9 @@ export function ContextProvider({ children }: { children: ReactNode }) {
             }
 
             save({
-                /*boundary: {
-                    included: config.boundary?.included ?? boundaryIncluded,
-                    excluded: config.boundary?.excluded ?? boundaryExcluded,
-                },*/
+                boundary: {
+                    points: config.boundary?.points ?? [],
+                },
                 stations: {
                     show: showStations,
                     busRouteThreshold,
