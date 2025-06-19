@@ -1,7 +1,6 @@
 import { ReactNode, useContext, useMemo } from 'react';
 import { Position } from 'geojson';
 import { bbox, buffer, polygon } from '@turf/turf';
-import { LatLngTuple } from 'leaflet';
 import { LayerGroup, GeoJSON, useMap } from 'react-leaflet';
 import { SharedContext } from './context';
 
@@ -15,8 +14,8 @@ export function BoundaryMask(): ReactNode {
     const poly = useMemo(() => {
         const innerPoly = polygon([boundaryPoints]);
         const innerBbox = bbox(innerPoly);
-        const outerPoly = buffer(innerPoly, 10)!;
-        map.fitBounds([innerBbox.slice(0, 2) as LatLngTuple, innerBbox.slice(2, 2) as LatLngTuple], { padding: [0, 0] });
+        const outerPoly = buffer(innerPoly, 30, { units: 'miles' })!;
+        map.fitBounds([[innerBbox[1], innerBbox[0]], [innerBbox[3], innerBbox[2]]], { padding: [0, 0] });
 
         const innerGeo = innerPoly.geometry.coordinates;
         const outerGeo = outerPoly.geometry.coordinates as Position[][];

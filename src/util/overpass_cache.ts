@@ -342,7 +342,7 @@ export async function getByTransportTypeAsync<T extends QueryElement>(
 
     const db = await dbInit();
 
-    const boundsStr = bounds.flat().join(' ');
+    const boundsStr = bounds.map(([lon, lat]) => [lat, lon]).flat().join(' ');
 
     let es = await dbGetTransportByBounds(db, boundsStr);
     console.log(`[cache] Found ${es.size} transport elements in cache`);

@@ -1,6 +1,8 @@
 import { ReactNode, useContext } from 'react';
+import { point, featureCollection } from '@turf/turf';
+import { FeatureCollection } from 'geojson';
 import { PathOptions } from 'leaflet';
-import { FeatureGroup, LayerGroup, CircleMarker, Tooltip } from 'react-leaflet';
+import { GeoJSON, LayerGroup, Tooltip } from 'react-leaflet';
 import { SharedContext } from './context';
 import { Station } from './data/index';
 
@@ -17,7 +19,7 @@ const HoverStyle: PathOptions = {
 
 export function StationMarkers(): ReactNode {
     const {
-        boundaryEditing, boundaryPath,
+        boundaryEditing, boundaryPoints,
         hovering,
         showStations, busRouteThreshold, trainRouteThreshold,
         stations,
@@ -38,18 +40,32 @@ export function StationMarkers(): ReactNode {
     }
 
     function renderStation(station: Station): ReactNode {
-        return <FeatureGroup key={station.id}>
-            <CircleMarker
-                center={[station.visual.lat, station.visual.lon]}
-                radius={5}
-                pathOptions={hovering === station.id ? HoverStyle : StationStyle}
-                eventHandlers={{click: () => console.log(station)}}>
-            </CircleMarker>
+        const json = featureCollection(
+            [point([station.visual.lon, station.visual.lat])],
+            { id: station.id },
+        );
+        return <GeoJSON
+            key={station.id}
+            data={json as FeatureCollection}
+            pathOptions={hovering === station.id ? HoverStyle : StationStyle}
+            eventHandlers={{
+                click: () => {
+                    console.log(station);
+                    // setHovering(station.id);
+                },
+                mouseover: () => {
+                    // setHovering(station.id);
+                },
+                mouseout: () => {
+                    // setHovering('');
+                },
+            }}
+        >
             <Tooltip>
                 <p className='font-bold'>{station.name}</p>
                 {modeString(station)}
             </Tooltip>
-        </FeatureGroup>;
+        </GeoJSON>;
     }
 
     const s = stations.flatMap(s => {
@@ -63,7 +79,7 @@ export function StationMarkers(): ReactNode {
         s.push(renderStation(hoveredStation));
     }
         
-    if (boundaryPath && !boundaryEditing && showStations) {
+    if (boundaryPoints && !boundaryEditing && showStations) {
         return <LayerGroup>
             {s}
         </LayerGroup>;
