@@ -11,6 +11,7 @@
     "test": "vitest --workspace=vitest.workspace.ts"
   },
   "dependencies": {
+    "@placemarkio/tokml": "^0.3.7",
     "@turf/boolean-point-in-polygon": "^7.2.0",
     "@turf/turf": "^7.2.0",
     "react": "^19.0.0",

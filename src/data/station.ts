@@ -1,6 +1,8 @@
 import { Relation, Way, Node, getSyntheticId, unpack, TransportType } from './index';
 import { memCacheId } from '../util/overpass_cache';
 import { LatLngTuple } from 'leaflet';
+import { FeatureCollection, Feature, GeometryObject } from 'geojson';
+import { featureCollection, point, circle } from '@turf/turf';
 
 const busTypes = ['bus', 'trolleybus', 'tram'];
 const trainTypes = ['train', 'subway', 'monorail', 'light_rail'];
@@ -159,6 +161,16 @@ export default class Station extends Relation {
         }
 
         return false;
+    }
+
+    public toJSON(): FeatureCollection {
+        return featureCollection(
+            [
+                point([this.visual.lon, this.visual.lat]),
+                circle([this.visual.lon, this.visual.lat], 0.5, { units: 'miles' }),
+            ] as Feature<GeometryObject>[],
+            { id: this.id },
+        );
     }
 
     private add(platform: Way | Node) {

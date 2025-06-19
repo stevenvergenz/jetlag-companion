@@ -1,15 +1,13 @@
 import { ReactNode, useContext } from 'react';
-import { point, featureCollection } from '@turf/turf';
-import { FeatureCollection } from 'geojson';
 import { PathOptions } from 'leaflet';
 import { GeoJSON, LayerGroup, Tooltip } from 'react-leaflet';
 import { SharedContext } from './context';
-import { Station } from './data/index';
+import { Station, Id } from './data/index';
 
 const StationStyle: PathOptions = {
     color: '#3388ff',
     weight: 2,
-    fillOpacity: 0.8,
+    fillOpacity: 0.5,
 };
 
 const HoverStyle: PathOptions = {
@@ -20,7 +18,7 @@ const HoverStyle: PathOptions = {
 export function StationMarkers(): ReactNode {
     const {
         boundaryEditing, boundaryPoints,
-        hovering,
+        hovering, setHovering,
         showStations, busRouteThreshold, trainRouteThreshold,
         stations,
     } = useContext(SharedContext);
@@ -39,26 +37,32 @@ export function StationMarkers(): ReactNode {
         return modes.map(m => <p key={`${station.id}-${m}`}>{m}</p>);
     }
 
+    function hoverStart(id: Id) {
+        return () => {
+            if (hovering !== id) {
+                setHovering(id);
+            }
+        };
+    }
+
+    function hoverEnd(id: Id) {
+        return () => {
+            if (hovering === id) {
+                setHovering('');
+            }
+        };
+    }
+    
+
     function renderStation(station: Station): ReactNode {
-        const json = featureCollection(
-            [point([station.visual.lon, station.visual.lat])],
-            { id: station.id },
-        );
         return <GeoJSON
             key={station.id}
-            data={json as FeatureCollection}
+            data={station.toJSON()}
             pathOptions={hovering === station.id ? HoverStyle : StationStyle}
             eventHandlers={{
-                click: () => {
-                    console.log(station);
-                    // setHovering(station.id);
-                },
-                mouseover: () => {
-                    // setHovering(station.id);
-                },
-                mouseout: () => {
-                    // setHovering('');
-                },
+                click: () => console.log(station),
+                mouseover: hoverStart(station.id),
+                mouseout: hoverEnd(station.id),
             }}
         >
             <Tooltip>
