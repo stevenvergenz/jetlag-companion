@@ -18,20 +18,22 @@ export function SideBar(): ReactNode {
         const innerPoly = polygon([boundaryPoints]);
         const outerPoly = buffer(innerPoly, 30, { units: 'miles' })!;
         const mask = difference(featureCollection([outerPoly, innerPoly]))!;
+        mask.properties = { name: 'Game Boundary' };
 
         const stationGeo = stations.flatMap(s => {
             if (s.shouldShow({ busRouteThreshold, trainRouteThreshold })) {
-                return [point([s.visual.lon, s.visual.lat])];
+                const p = point([s.visual.lon, s.visual.lat]);
+                p.properties = { name: s.name };
+                return [p];
             } else {
                 return [];
             }
         });
 
-        const json = featureCollection([mask, ...stationGeo] as Feature<GeometryObject>[]);
+        const json = featureCollection([...stationGeo, mask] as Feature<GeometryObject>[]);
         const kml = toKML(json);
-        console.log(kml);
         
-        const blob = URL.createObjectURL(new Blob([Uint8Array.from(kml)]));
+        const blob = URL.createObjectURL(new Blob([new TextEncoder().encode(kml)]));
         const link = document.createElement('a');
         link.href = blob;
         link.download = 'config.kml';
