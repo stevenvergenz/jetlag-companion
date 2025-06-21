@@ -1,7 +1,21 @@
-import '../node_modules/leaflet/dist/leaflet.css';
+import 'leaflet/dist/leaflet.css';
 
 import { ReactNode } from 'react';
 import { MapContainer, TileLayer } from 'react-leaflet';
+
+import { Icon } from 'leaflet';
+import marker from 'leaflet/dist/images/marker-icon.png';
+import marker2x from 'leaflet/dist/images/marker-icon-2x.png';
+import shadow from 'leaflet/dist/images/marker-shadow.png';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+delete (Icon.Default.prototype as any)._getIconUrl;
+
+Icon.Default.mergeOptions({
+  iconUrl: marker,
+  iconRetinaUrl: marker2x,
+  shadowUrl: shadow,
+});
 
 import { TopBar } from './top_bar';
 import { ContextProvider } from './context';

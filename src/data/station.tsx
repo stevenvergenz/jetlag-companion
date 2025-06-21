@@ -3,6 +3,7 @@ import { memCacheId } from '../util/overpass_cache';
 import { LatLngTuple } from 'leaflet';
 import { FeatureCollection, Feature, GeometryObject } from 'geojson';
 import { featureCollection, point, circle } from '@turf/turf';
+import { ReactNode } from 'react';
 
 const busTypes = ['bus', 'trolleybus', 'tram'];
 const trainTypes = ['train', 'subway', 'monorail', 'light_rail'];
@@ -119,6 +120,21 @@ export default class Station extends Relation {
         || trainRouteThreshold > 0 && trainRouteThreshold <=
             trainTypes.map(t => this.connections.get(t)?.size ?? 0).reduce((a, b) => a + b)
         || otherTypes.length > 0;
+    }
+
+
+    public modeString(): ReactNode {
+        const modes = [] as string[];
+
+        if (this.firstElementWithRole('station')) {
+            modes.push('Station');
+        }
+
+        for (const [type, connections] of this.connections.entries()) {
+            modes.push(`${type} (${[...connections].join(', ')})`);
+        }
+
+        return modes.map(m => <p key={`${this.id}-${m}`}>{m}</p>);
     }
 
     /** @returns true if the platform is now part of the station */

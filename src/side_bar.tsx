@@ -14,7 +14,7 @@ export function SideBar(): ReactNode {
         busRouteThreshold, trainRouteThreshold,
     } = useContext(SharedContext);
 
-    function saveAsJson() {
+    function saveToKml() {
         const innerPoly = polygon([boundaryPoints]);
         const outerPoly = buffer(innerPoly, 30, { units: 'miles' })!;
         const mask = difference(featureCollection([outerPoly, innerPoly]))!;
@@ -23,7 +23,7 @@ export function SideBar(): ReactNode {
         const stationGeo = stations.flatMap(s => {
             if (s.shouldShow({ busRouteThreshold, trainRouteThreshold })) {
                 const p = point([s.visual.lon, s.visual.lat]);
-                p.properties = { name: s.name };
+                p.properties = { name: s.name, description: s.modeString() };
                 return [p];
             } else {
                 return [];
@@ -48,8 +48,8 @@ export function SideBar(): ReactNode {
         'bg p-4 gap-2 flex flex-col content-stretch'}>
         { /* <BoundaryConfig /> */ }
         <StationConfig />
-        <button className='btn btn-primary' onClick={saveAsJson}>
-            Save as JSON
+        <button className='btn btn-primary' onClick={saveToKml}>
+            Export To KML
         </button>
     </div>;
 }

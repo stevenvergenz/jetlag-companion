@@ -23,20 +23,6 @@ export function StationMarkers(): ReactNode {
         stations,
     } = useContext(SharedContext);
 
-    function modeString(station: Station): ReactNode {
-        const modes = [] as string[];
-
-        if (station.firstElementWithRole('station')) {
-            modes.push('Station');
-        }
-
-        for (const [type, connections] of station.connections.entries()) {
-            modes.push(`${type} (${[...connections].join(', ')})`);
-        }
-
-        return modes.map(m => <p key={`${station.id}-${m}`}>{m}</p>);
-    }
-
     function hoverStart(id: Id) {
         return () => {
             if (hovering !== id) {
@@ -67,7 +53,7 @@ export function StationMarkers(): ReactNode {
         >
             <Tooltip>
                 <p className='font-bold'>{station.name}</p>
-                {modeString(station)}
+                {station.modeString()}
             </Tooltip>
         </GeoJSON>;
     }
@@ -84,7 +70,7 @@ export function StationMarkers(): ReactNode {
     }
         
     if (boundaryPoints && !boundaryEditing && showStations) {
-        return <LayerGroup attribution='<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'>
+        return <LayerGroup attribution='<a target="_blank" href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'>
             {s}
         </LayerGroup>;
     }
