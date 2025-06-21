@@ -84,7 +84,7 @@ export function StationMarkers(): ReactNode {
     }
         
     if (boundaryPoints && !boundaryEditing && showStations) {
-        return <LayerGroup>
+        return <LayerGroup attribution='<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'>
             {s}
         </LayerGroup>;
     }
