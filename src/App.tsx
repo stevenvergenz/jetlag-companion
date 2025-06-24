@@ -22,6 +22,7 @@ import { ContextProvider } from './context';
 import { SideBar } from './side_bar';
 import { BoundaryMask } from './boundary_mask';
 import { StationMarkers } from './station_markers';
+import BoundaryEditor from './boundary_editor';
 
 export default function App(): ReactNode {
   return <div className='w-full h-full flex flex-col'>
@@ -34,8 +35,9 @@ export default function App(): ReactNode {
           zoom={4}
         >
           <TileLayer url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'></TileLayer>
-          <BoundaryMask />
-          <StationMarkers />
+          { /* <BoundaryMask /> */ }
+          { /* <StationMarkers /> */ }
+          <BoundaryEditor />
         </MapContainer>
       </ContextProvider>
     </div>

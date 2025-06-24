@@ -47,7 +47,7 @@ export function SideBar(): ReactNode {
         'min-w-fit max-w-md overflow-y-auto max-h-screen ' +
         'bg p-4 gap-2 flex flex-col content-stretch'}>
         { /* <BoundaryConfig /> */ }
-        <StationConfig />
+        { /* <StationConfig /> */ }
         <button className='btn btn-primary' onClick={saveToKml}>
             Export To KML
         </button>
