@@ -15,7 +15,7 @@ const HoverStyle: PathOptions = {
     color: '#ff0000',
 };
 
-export function StationMarkers(): ReactNode {
+export default function StationMarkers(): ReactNode {
     const {
         boundaryEditing, boundaryPoints,
         hovering, setHovering,

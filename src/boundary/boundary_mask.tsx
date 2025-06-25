@@ -1,9 +1,9 @@
 import { ReactNode, useContext, useMemo } from 'react';
-import { bbox, buffer, polygon, difference, featureCollection } from '@turf/turf';
 import { LayerGroup, GeoJSON, useMap } from 'react-leaflet';
-import { SharedContext } from './context';
+import { bbox, buffer, polygon, difference, featureCollection } from '@turf/turf';
+import { SharedContext } from '../context';
 
-export function BoundaryMask(): ReactNode {
+export default function BoundaryMask(): ReactNode {
     const map = useMap();
     const {
         boundaryPoints,
