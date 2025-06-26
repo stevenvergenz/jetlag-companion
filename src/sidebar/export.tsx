@@ -1,13 +1,10 @@
-import { ReactNode, useContext } from 'react';
+import { useContext } from 'react';
 import { polygon, buffer, difference, featureCollection, point } from '@turf/turf';
 import { Feature, GeometryObject } from 'geojson';
 import { toKML } from '@placemarkio/tokml';
-import { SharedContext } from './context';
+import { SharedContext } from '../context';
 
-// import { BoundaryConfig } from './boundary_config';
-import { StationConfig } from './station_config';
-
-export default function SideBar(): ReactNode {
+export default function ExportTab() {
     const {
         boundaryPoints,
         stations,
@@ -43,10 +40,7 @@ export default function SideBar(): ReactNode {
         URL.revokeObjectURL(blob);
     }
 
-    return <div className={
-        'min-w-fit max-w-md overflow-y-auto max-h-screen ' +
-        'bg p-4 gap-2 flex flex-col content-stretch'}>
-        <StationConfig />
+    return <div>
         <button className='btn btn-primary' onClick={saveToKml}>
             Export To KML
         </button>

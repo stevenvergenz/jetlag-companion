@@ -1,6 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import 'leaflet/dist/leaflet.css';
+// import 'tailwindcss/tailwind.css';
+// import 'tailwindcss/base.css';
+// import 'tailwindcss/components.css';
+// import 'tailwindcss/utilities.css';
 
 import './index.css';
 

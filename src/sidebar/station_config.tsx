@@ -1,9 +1,9 @@
 import { ReactNode, useContext, useState } from 'react';
 
-import { Id, unpack, Way, Node, Station } from './data/index';
-import { TreeNode } from './util/tree_node';
-import { SharedContext } from './context';
-import { getByTransportTypeAsync, memCacheId } from './util/overpass_cache';
+import { Id, unpack, Way, Node, Station } from '../data';
+import { TreeNode } from '../util/tree_node';
+import { SharedContext } from '../context';
+import { getByTransportTypeAsync, memCacheId } from '../util/overpass_cache';
 
 export function StationConfig(): ReactNode {
     const {

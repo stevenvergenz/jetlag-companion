@@ -2,9 +2,9 @@ import { ReactNode } from 'react';
 import { MapContainer, TileLayer } from 'react-leaflet';
 
 import { ContextProvider } from './context';
-import SideBar from './side_bar';
+import SideBar from './sidebar';
 import StationMarkers from './station_markers';
-import Boundary from './boundary/boundary';
+import Boundary from './boundary';
 
 export default function App(): ReactNode {
   return <div className='w-full h-full flex flex-row'>
