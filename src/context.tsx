@@ -3,16 +3,14 @@ import { Position } from 'geojson';
 
 import { Id, Element, Station } from './data/index';
 import { load, save, PartialConfig } from './config';
+import { dbClear, memCacheId } from './util/overpass_cache';
 
 type ContextContent = {
     boundaryPoints: Position[],
     //setBoundaryPoints: React.Dispatch<React.SetStateAction<Position[]>>,
     boundaryEditing: boolean,
     setBoundaryEditing: React.Dispatch<React.SetStateAction<boolean>>,
-    boundaryErrors: Set<Id>,
-    setBoundaryErrors: React.Dispatch<React.SetStateAction<Set<Id>>>,
 
-    showStations: boolean,
     busRouteThreshold: number,
     trainRouteThreshold: number,
     stations: Station[],
@@ -30,10 +28,7 @@ const dummyContent: ContextContent = {
     //setBoundaryPoints: () => {},
     boundaryEditing: false,
     setBoundaryEditing: () => {},
-    boundaryErrors: new Set(),
-    setBoundaryErrors: () => {},
 
-    showStations: config.stations.show,
     busRouteThreshold: 2,
     trainRouteThreshold: 1,
     stations: [],
@@ -55,9 +50,7 @@ export const SharedContext = createContext(dummyContent);
 export function ContextProvider({ children }: { children: ReactNode }) {
     const [boundaryPoints, setBoundaryPoints] = useState<Position[]>(config.boundary?.points ?? []);
     const [boundaryEditing, setBoundaryEditing] = useState(false);
-    const [boundaryErrors, setBoundaryErrors] = useState(new Set<Id>());
 
-    const [showStations, setShowStations] = useState(config.stations.show);
     const [busRouteThreshold, setBusRouteThreshold] = useState(config.stations.busRouteThreshold);
     const [trainRouteThreshold, setTrainRouteThreshold] = useState(config.stations.trainRouteThreshold);
     const [stations, setStations] = useState([] as Station[]);
@@ -67,9 +60,7 @@ export function ContextProvider({ children }: { children: ReactNode }) {
     const context: ContextContent = {
         boundaryPoints, //setBoundaryPoints,
         boundaryEditing, setBoundaryEditing,
-        boundaryErrors, setBoundaryErrors,
 
-        showStations,
         busRouteThreshold,
         trainRouteThreshold,
         stations, setStations,
@@ -78,9 +69,8 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         save: (config: PartialConfig) => {
             if (config.boundary?.points !== undefined) {
                 setBoundaryPoints(config.boundary.points);
-            }
-            if (config.stations?.show !== undefined) {
-                setShowStations(config.stations.show);
+                dbClear();
+                memCacheId.clear();
             }
             if (config.stations?.busRouteThreshold !== undefined) {
                 setBusRouteThreshold(config.stations.busRouteThreshold);
@@ -94,7 +84,6 @@ export function ContextProvider({ children }: { children: ReactNode }) {
                     points: config.boundary?.points ?? [],
                 },
                 stations: {
-                    show: showStations,
                     busRouteThreshold,
                     trainRouteThreshold,
                     ...config.stations,

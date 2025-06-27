@@ -54,7 +54,7 @@ export default function SideBar({ mapRef }: { mapRef: RefObject<Map> }): ReactNo
         'w-1/3 grow-0 overflow-y-auto max-h-screen ' +
         'bg p-4 gap-2 flex flex-col content-stretch text-center'}>
         <h1>Jet Lag Companion</h1>
-        <div className='flex-grow overflow-auto flex flex-col justify-center align-center'>
+        <div className='flex-grow overflow-auto flex'>
             { renderTab }
         </div>
         <div className='flex flex-row justify-between'>

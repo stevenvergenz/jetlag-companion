@@ -1,14 +1,12 @@
 import { ReactNode, useContext, useState } from 'react';
 
 import { Id, unpack, Way, Node, Station } from '../data';
-import { TreeNode } from '../util/tree_node';
 import { SharedContext } from '../context';
 import { getByTransportTypeAsync, memCacheId } from '../util/overpass_cache';
 
 export function StationConfig(): ReactNode {
     const {
         boundaryPoints,
-        showStations,
         busRouteThreshold,
         trainRouteThreshold,
         stations, setStations,
@@ -16,14 +14,6 @@ export function StationConfig(): ReactNode {
         save,
     } = useContext(SharedContext);
     const [calcStarted, setCalcStarted] = useState(false);
-
-    function setShowStations(show: boolean) {
-        save({
-            stations: {
-                show,
-            },
-        });
-    }
 
     function setTrainRouteThreshold(threshold: number) {
         save({
@@ -43,11 +33,30 @@ export function StationConfig(): ReactNode {
     
     function genLabel(station: Station) {
         const { type, id } = unpack(station.childRefs[0].id);
-        return <label>
-            {station.name} (
-            <a target='_blank' href={`https://www.openstreetmap.org/${type}/${id}`}>{station.childRefs[0].id}</a>
-            )
-        </label>;
+        return <li>
+            <a target='_blank' href={`https://www.openstreetmap.org/${type}/${id}`}
+                onMouseEnter={hoverStart(station.childRefs[0].id)}
+                onMouseLeave={hoverEnd(station.childRefs[0].id)}
+            >
+                {station.name}
+            </a>
+        </li>;
+    }
+
+    function hoverStart(id: Id) {
+        return () => {
+            if (hovering !== id) {
+                setHovering(id);
+            }
+        };
+    }
+
+    function hoverEnd(id: Id) {
+        return () => {
+            if (hovering === id) {
+                setHovering('');
+            }
+        };
     }
 
     async function calcStations() {
@@ -83,54 +92,34 @@ export function StationConfig(): ReactNode {
         setStations(tempStations);
     }
 
-    function hoverStart(id: Id) {
-        return () => {
-            if (hovering !== id) {
-                setHovering(id);
-            }
-        };
-    }
-
-    function hoverEnd(id: Id) {
-        return () => {
-            if (hovering === id) {
-                setHovering('');
-            }
-        };
-    }
-
     if (stations.length === 0 && !calcStarted) {
         calcStations();
         return;
     }
 
-    const stationElems = stations
-        .filter(s => s.shouldShow({ busRouteThreshold, trainRouteThreshold }))
-        .map(s => {
-            return <TreeNode id={s.id} key={s.id} initiallyOpen={true}
-                onMouseEnter={hoverStart(s.id)} onMouseLeave={hoverEnd(s.id)} >
-                {genLabel(s)}
-            </TreeNode>;
-        });
+    const s = stations.filter(s => s.shouldShow({ busRouteThreshold, trainRouteThreshold }))
+        .map(s => genLabel(s))
 
-    return <TreeNode id='stations' initiallyOpen={true}>
-        <label className='font-bold'>
-            <input type='checkbox' checked={showStations} onChange={e => setShowStations(e.target.checked)} />
-            &nbsp; Stations ({stationElems.length})
-        </label>
-        <TreeNode id='station-settings' initiallyOpen={true}>
-            <span className='font-bold'>Settings</span>
-            <label>
-                <input type='number' min='0' max='10'
-                    value={trainRouteThreshold} onChange={e => setTrainRouteThreshold(e.target.valueAsNumber)}/>
-                &nbsp; Train routes
-            </label>
-            <label>
-                <input type='number' min='0' max='10'
-                    value={busRouteThreshold} onChange={e => setBusRouteThreshold(e.target.valueAsNumber)}/>
-                &nbsp; Bus routes
-            </label>
-        </TreeNode>
-        {stationElems}
-    </TreeNode>;
+    return <div>
+        <h2>Station Criteria</h2>
+        <p>
+            Hide and seek "stations" are transit hubs that are important for your game.
+            Set the criteria for which transit hubs you want to include.
+            At least one of the criteria must be met.
+        </p>
+        <div className='grid grid-cols-2 gap-2'>
+            <label>Train connections:</label>
+            <input type='number' min={0} max={10} step={1}
+                value={trainRouteThreshold} onChange={(e) => setTrainRouteThreshold(parseInt(e.target.value, 10))}
+                />
+            <label>Bus connections:</label>
+            <input type='number' min={0} max={10} step={1}
+                value={busRouteThreshold} onChange={(e) => setBusRouteThreshold(parseInt(e.target.value, 10))}
+                />
+        </div>
+        <p>{s.length} stations found:</p>
+        <ul>
+            {s}
+        </ul>
+    </div>;
 }

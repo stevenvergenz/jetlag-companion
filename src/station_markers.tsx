@@ -19,7 +19,7 @@ export default function StationMarkers(): ReactNode {
     const {
         boundaryEditing, boundaryPoints,
         hovering, setHovering,
-        showStations, busRouteThreshold, trainRouteThreshold,
+        busRouteThreshold, trainRouteThreshold,
         stations,
     } = useContext(SharedContext);
 
@@ -69,7 +69,7 @@ export default function StationMarkers(): ReactNode {
         s.push(renderStation(hoveredStation));
     }
         
-    if (boundaryPoints && !boundaryEditing && showStations) {
+    if (boundaryPoints && !boundaryEditing) {
         return <LayerGroup attribution='<a target="_blank" href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'>
             {s}
         </LayerGroup>;

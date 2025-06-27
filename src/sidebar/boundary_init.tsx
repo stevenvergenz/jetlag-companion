@@ -28,7 +28,7 @@ export default function BoundaryInit({ mapRef }: { mapRef: RefObject<Map> }): Re
         });
     }
 
-    return <div>
+    return <div className='flex-grow flex flex-col justify-center items-center'>
         <h2>Boundary Setup</h2>
         <p>
             Position the map on the area in which you want to play, then click "Setup".

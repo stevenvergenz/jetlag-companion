@@ -5,7 +5,6 @@ export type BoundaryConfig = {
 };
 
 export type StationConfig = {
-    show: boolean,
     busRouteThreshold: number,
     trainRouteThreshold: number,
 };
@@ -25,7 +24,6 @@ export const DefaultConfig: Config = {
         points: [],
     },
     stations: {
-        show: true,
         busRouteThreshold: 2,
         trainRouteThreshold: 1,
     },
@@ -39,7 +37,6 @@ export function load(): Config {
             points: JSON.parse(window.localStorage.getItem('boundary_points') ?? '[]') as Position[],
         },
         stations: {
-            show: window.localStorage.getItem('stations_show') === 'true',
             busRouteThreshold: busRoutes ? parseInt(busRoutes, 10) : DefaultConfig.stations.busRouteThreshold,
             trainRouteThreshold: trainRoutes ? parseInt(trainRoutes, 10) : DefaultConfig.stations.trainRouteThreshold,
         },
@@ -48,7 +45,6 @@ export function load(): Config {
 
 export function save(config: Config) {
     window.localStorage.setItem('boundary_points', JSON.stringify(config.boundary.points));
-    window.localStorage.setItem('stations_show', config.stations.show.toString());
     window.localStorage.setItem('stations_bus_routes', config.stations.busRouteThreshold.toString());
     window.localStorage.setItem('stations_train_routes', config.stations.trainRouteThreshold.toString());
 }
