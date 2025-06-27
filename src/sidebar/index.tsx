@@ -1,8 +1,10 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, RefObject } from 'react';
+import { Map } from 'leaflet';
 
 // import { BoundaryConfig } from './boundary_config';
 import { StationConfig } from './station_config';
 import Welcome from './welcome';
+import BoundaryInit from './boundary_init';
 
 enum Tab {
     Welcome,
@@ -12,12 +14,12 @@ enum Tab {
     Export,
 }
 
-export default function SideBar(): ReactNode {
+export default function SideBar({ mapRef }: { mapRef: RefObject<Map> }): ReactNode {
     const [tab, setTab] = useState<Tab>(Tab.Welcome);
 
     const renderTab: ReactNode
         = tab === Tab.Welcome ? <Welcome />
-        : tab === Tab.BoundaryInit ? <div>Boundary Init Placeholder</div>
+        : tab === Tab.BoundaryInit ? <BoundaryInit mapRef={mapRef}/>
         : tab === Tab.BoundaryAdjust ? <div>Boundary Adjust Placeholder</div>
         : tab === Tab.Stations ? <StationConfig />
         : tab === Tab.Export ? <div>Export Placeholder</div>

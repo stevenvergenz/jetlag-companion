@@ -6,7 +6,7 @@ import { load, save, PartialConfig } from './config';
 
 type ContextContent = {
     boundaryPoints: Position[],
-    setBoundaryPoints: React.Dispatch<React.SetStateAction<Position[]>>,
+    //setBoundaryPoints: React.Dispatch<React.SetStateAction<Position[]>>,
     boundaryEditing: boolean,
     setBoundaryEditing: React.Dispatch<React.SetStateAction<boolean>>,
     boundaryErrors: Set<Id>,
@@ -27,7 +27,7 @@ type ContextContent = {
 const config = load();
 const dummyContent: ContextContent = {
     boundaryPoints: [],
-    setBoundaryPoints: () => {},
+    //setBoundaryPoints: () => {},
     boundaryEditing: false,
     setBoundaryEditing: () => {},
     boundaryErrors: new Set(),
@@ -50,18 +50,10 @@ export function notExcluded(excluded: Set<Id>) {
     };
 }
 
-const b: Position[] = [
-    [-122.432753, 47.599258],
-    [-122.13657886784392, 47.59631121360593],
-    [-122.13512227280195, 47.356092023685264],
-    [-122.43615191480433, 47.360696681973934],
-    [-122.432753, 47.599258],
-];
-
 export const SharedContext = createContext(dummyContent);
 
 export function ContextProvider({ children }: { children: ReactNode }) {
-    const [boundaryPoints, setBoundaryPoints] = useState(b as Position[]);
+    const [boundaryPoints, setBoundaryPoints] = useState<Position[]>(config.boundary?.points ?? []);
     const [boundaryEditing, setBoundaryEditing] = useState(false);
     const [boundaryErrors, setBoundaryErrors] = useState(new Set<Id>());
 
@@ -72,9 +64,8 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
     const [hovering, setHovering] = useState('');
 
-
     const context: ContextContent = {
-        boundaryPoints, setBoundaryPoints,
+        boundaryPoints, //setBoundaryPoints,
         boundaryEditing, setBoundaryEditing,
         boundaryErrors, setBoundaryErrors,
 

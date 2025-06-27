@@ -1,27 +1,31 @@
 import { ReactNode, useContext, useMemo } from 'react';
-import { LayerGroup, GeoJSON, useMap } from 'react-leaflet';
-import { bbox, buffer, polygon, difference, featureCollection } from '@turf/turf';
+import { Polygon, useMap } from 'react-leaflet';
+import { LatLngTuple } from 'leaflet';
+import { bbox, buffer, polygon } from '@turf/turf';
 import { SharedContext } from '../context';
 
 export default function BoundaryMask(): ReactNode {
     const map = useMap();
     const {
         boundaryPoints,
-        boundaryEditing,
     } = useContext(SharedContext);
 
-    const poly = useMemo(() => {
+    const poly = useMemo<LatLngTuple[][]>(() => {
+        if (boundaryPoints.length < 4) {
+            return [];
+        }
+        
         const innerPoly = polygon([boundaryPoints]);
         const innerBbox = bbox(innerPoly);
         const outerPoly = buffer(innerPoly, 30, { units: 'miles' })!;
         map.fitBounds([[innerBbox[1], innerBbox[0]], [innerBbox[3], innerBbox[2]]], { padding: [0, 0] });
 
-        return difference(featureCollection([outerPoly, innerPoly]))!;
+        return [
+            outerPoly.geometry.coordinates[0].map(p => [p[1], p[0]] as LatLngTuple),
+            innerPoly.geometry.coordinates[0].map(p => [p[1], p[0]] as LatLngTuple),
+        ];
     }, [boundaryPoints, map]);
 
-    if (!boundaryEditing) {
-        return <LayerGroup>
-            <GeoJSON data={poly} interactive={false} pathOptions={{ color: 'black' }}/>
-        </LayerGroup>;
-    }
+    return boundaryPoints.length >= 4
+        && <Polygon positions={poly} pathOptions={{ color: 'black', fillColor: 'black' }}/>;
 }
