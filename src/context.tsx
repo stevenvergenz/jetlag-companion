@@ -2,7 +2,7 @@ import React, { createContext, ReactNode, useState } from 'react';
 import { Position } from 'geojson';
 
 import { Id, Element, Station } from './data/index';
-import { load, save, PartialConfig } from './config';
+import { load, save, PartialConfig, apply } from './config';
 import { dbClear, memCacheId } from './util/overpass_cache';
 
 type ContextContent = {
@@ -22,7 +22,7 @@ type ContextContent = {
     save: (config: PartialConfig) => void,
 };
 
-const config = load();
+let config = load();
 const dummyContent: ContextContent = {
     boundaryPoints: [],
     //setBoundaryPoints: () => {},
@@ -66,29 +66,23 @@ export function ContextProvider({ children }: { children: ReactNode }) {
         stations, setStations,
 
         hovering, setHovering,
-        save: (config: PartialConfig) => {
-            if (config.boundary?.points !== undefined) {
-                setBoundaryPoints(config.boundary.points);
+        save: (update: PartialConfig) => {
+            const updatedConfig = apply(config, update);
+            console.log(config, update, updatedConfig);
+            if (update.boundary?.points !== undefined) {
+                setBoundaryPoints(updatedConfig.boundary.points);
                 dbClear();
                 memCacheId.clear();
             }
-            if (config.stations?.busRouteThreshold !== undefined) {
-                setBusRouteThreshold(config.stations.busRouteThreshold);
+            if (update.stations?.busRouteThreshold !== undefined) {
+                setBusRouteThreshold(updatedConfig.stations.busRouteThreshold);
             }
-            if (config.stations?.trainRouteThreshold !== undefined) {
-                setTrainRouteThreshold(config.stations.trainRouteThreshold);
+            if (update.stations?.trainRouteThreshold !== undefined) {
+                setTrainRouteThreshold(updatedConfig.stations.trainRouteThreshold);
             }
 
-            save({
-                boundary: {
-                    points: config.boundary?.points ?? [],
-                },
-                stations: {
-                    busRouteThreshold,
-                    trainRouteThreshold,
-                    ...config.stations,
-                },
-            });
+            save(updatedConfig);
+            config = updatedConfig;
         },
     };
 

@@ -48,3 +48,15 @@ export function save(config: Config) {
     window.localStorage.setItem('stations_bus_routes', config.stations.busRouteThreshold.toString());
     window.localStorage.setItem('stations_train_routes', config.stations.trainRouteThreshold.toString());
 }
+
+export function apply(config: Config, update: PartialConfig): Config {
+    return {
+        boundary: {
+            points: update.boundary?.points ?? config.boundary.points,
+        },
+        stations: {
+            busRouteThreshold: update.stations?.busRouteThreshold ?? config.stations.busRouteThreshold,
+            trainRouteThreshold: update.stations?.trainRouteThreshold ?? config.stations.trainRouteThreshold,
+        },
+    };
+}
