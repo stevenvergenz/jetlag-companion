@@ -60,7 +60,7 @@ export function StationConfig(): ReactNode {
     }
 
     async function calcStations() {
-        if (!boundaryPoints || boundaryPoints.length < 2 || calcStarted) {
+        if (!boundaryPoints || boundaryPoints.length < 4 || calcStarted) {
             return;
         }
 
@@ -110,11 +110,11 @@ export function StationConfig(): ReactNode {
         <div className='grid grid-cols-2 gap-2'>
             <label>Train connections:</label>
             <input type='number' min={0} max={10} step={1}
-                value={trainRouteThreshold} onChange={(e) => setTrainRouteThreshold(parseInt(e.target.value, 10))}
+                value={trainRouteThreshold} onChange={(e) => setTrainRouteThreshold(e.target.valueAsNumber)}
                 />
             <label>Bus connections:</label>
             <input type='number' min={0} max={10} step={1}
-                value={busRouteThreshold} onChange={(e) => setBusRouteThreshold(parseInt(e.target.value, 10))}
+                value={busRouteThreshold} onChange={(e) => setBusRouteThreshold(e.target.valueAsNumber)}
                 />
         </div>
         <p>{s.length} stations found:</p>

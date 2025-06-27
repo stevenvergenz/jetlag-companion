@@ -67,22 +67,20 @@ export function ContextProvider({ children }: { children: ReactNode }) {
 
         hovering, setHovering,
         save: (update: PartialConfig) => {
-            const updatedConfig = apply(config, update);
-            console.log(config, update, updatedConfig);
+            config = apply(config, update);
+            save(config);
+
             if (update.boundary?.points !== undefined) {
-                setBoundaryPoints(updatedConfig.boundary.points);
+                setBoundaryPoints(config.boundary.points);
                 dbClear();
                 memCacheId.clear();
             }
             if (update.stations?.busRouteThreshold !== undefined) {
-                setBusRouteThreshold(updatedConfig.stations.busRouteThreshold);
+                setBusRouteThreshold(config.stations.busRouteThreshold);
             }
             if (update.stations?.trainRouteThreshold !== undefined) {
-                setTrainRouteThreshold(updatedConfig.stations.trainRouteThreshold);
+                setTrainRouteThreshold(config.stations.trainRouteThreshold);
             }
-
-            save(updatedConfig);
-            config = updatedConfig;
         },
     };
 
