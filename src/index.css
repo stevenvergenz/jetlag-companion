@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/*
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -36,8 +35,18 @@ body {
 }
 
 h1 {
-  font-size: 3.2em;
+  font-size: 2.5em;
   line-height: 1.1;
+}
+
+h2 {
+  font-size: 2em;
+  line-height: 1.1;
+  margin-bottom: 1em;
+}
+
+p {
+  margin: 0 0 1em;
 }
 
 button {
@@ -58,6 +67,10 @@ button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 @media (prefers-color-scheme: light) {
   :root {
@@ -71,4 +84,3 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
-*/

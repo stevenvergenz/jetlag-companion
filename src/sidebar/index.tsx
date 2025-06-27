@@ -44,17 +44,17 @@ export default function SideBar(): ReactNode {
     }
 
     return <div className={
-        'min-w-md max-w-md overflow-y-auto max-h-screen ' +
+        'w-1/3 grow-0 overflow-y-auto max-h-screen ' +
         'bg p-4 gap-2 flex flex-col content-stretch text-center'}>
-        <h1 className='text-xl font-bold'>Jet Lag: The Game - Companion</h1>
-        <div>
+        <h1>Jet Lag Companion</h1>
+        <div className='flex-grow overflow-auto flex flex-col justify-center align-center'>
             { renderTab }
         </div>
         <div className='flex flex-row justify-between'>
-            <button className='btn btn-primary' onClick={prevTab}>
+            <button disabled={tab === Tab.Welcome} onClick={prevTab}>
                 Back
             </button>
-            <button className='btn btn-primary' onClick={nextTab}>
+            <button disabled={tab === Tab.Export} onClick={nextTab}>
                 Next
             </button>
         </div>

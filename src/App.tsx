@@ -7,7 +7,7 @@ import StationMarkers from './station_markers';
 import Boundary from './boundary';
 
 export default function App(): ReactNode {
-  return <div className='w-full h-full flex flex-row'>
+  return <div className='w-full h-full flex flex-row items-stretch justify-stretch'>
     <ContextProvider>
       <SideBar />
       <MapContainer className='flex-grow'
