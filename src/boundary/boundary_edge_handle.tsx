@@ -1,6 +1,6 @@
-import { ReactNode, useMemo } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { Position } from 'geojson';
-import { LeafletEvent, LeafletEventHandlerFnMap, LineUtil, CRS } from 'leaflet';
+import { LeafletEvent, LeafletEventHandlerFnMap, LineUtil, CRS, PathOptions } from 'leaflet';
 import { Polyline, Tooltip } from 'react-leaflet';
 import { contextAction } from "./util";
 
@@ -11,6 +11,7 @@ type BoundaryEdgeHandleProps = {
 };
 
 export default function BoundaryEdgeHandle({ i, points, save }: BoundaryEdgeHandleProps): ReactNode {
+    const [hover, setHover] = useState(false);
     const handlers = useMemo<LeafletEventHandlerFnMap>(() => ({
         contextmenu: ({ target }: LeafletEvent) => {
             if (!target) { return; }
@@ -22,12 +23,18 @@ export default function BoundaryEdgeHandle({ i, points, save }: BoundaryEdgeHand
             newPoints.splice(i + 1, 0, [pMid.lng, pMid.lat] satisfies Position);
             save(newPoints);
         },
+        mouseover: () => setHover(true),
+        mouseout: () => setHover(false),
     }), [i, points, save]);
+
+    const pathOptions = {
+        color: 'black',
+        weight: hover ? 5 : 3,
+    } satisfies PathOptions;
 
     return <Polyline
         positions={[[points[i][1], points[i][0]], [points[i + 1][1], points[i + 1][0]]]}
-        color='black'
-        weight={2}
+        pathOptions={pathOptions}
         interactive={true}
         eventHandlers={handlers}
     >

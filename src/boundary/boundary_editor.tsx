@@ -5,7 +5,7 @@ import BoundaryPointHandle from './boundary_point_handle';
 import BoundaryEdgeHandle from './boundary_edge_handle';
 
 export default function BoundaryEditor(): ReactNode {
-    const { boundaryPoints, setBoundaryPoints } = useContext(SharedContext);
+    const { boundaryPoints, save } = useContext(SharedContext);
     const [ editPoints, setEditPoints ] = useState(boundaryPoints);
 
     const points = editPoints.slice(0, -1).map((_, i) => 
@@ -16,7 +16,11 @@ export default function BoundaryEditor(): ReactNode {
             update={setEditPoints}
             save={p => {
                 setEditPoints(p);
-                setBoundaryPoints(p);
+                save({
+                    boundary: {
+                        points: p,
+                    },
+                });
             }}
         />
     );
@@ -28,7 +32,11 @@ export default function BoundaryEditor(): ReactNode {
             points={editPoints}
             save={p => {
                 setEditPoints(p);
-                setBoundaryPoints(p);
+                save({
+                    boundary: {
+                        points: p,
+                    },
+                });
             }}
         />
     );

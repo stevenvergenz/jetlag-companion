@@ -1,10 +1,12 @@
-import { ReactNode, useState, RefObject } from 'react';
+import { ReactNode, useState, RefObject, useContext } from 'react';
 import { Map } from 'leaflet';
 
 // import { BoundaryConfig } from './boundary_config';
+import { SharedContext } from '../context';
 import { StationConfig } from './station_config';
 import Welcome from './welcome';
 import BoundaryInit from './boundary_init';
+import BoundaryAdjust from './boundary_adjust';
 
 enum Tab {
     Welcome,
@@ -15,12 +17,13 @@ enum Tab {
 }
 
 export default function SideBar({ mapRef }: { mapRef: RefObject<Map> }): ReactNode {
+    const { setBoundaryEditing } = useContext(SharedContext);
     const [tab, setTab] = useState<Tab>(Tab.Welcome);
 
     const renderTab: ReactNode
         = tab === Tab.Welcome ? <Welcome />
         : tab === Tab.BoundaryInit ? <BoundaryInit mapRef={mapRef}/>
-        : tab === Tab.BoundaryAdjust ? <div>Boundary Adjust Placeholder</div>
+        : tab === Tab.BoundaryAdjust ? <BoundaryAdjust />
         : tab === Tab.Stations ? <StationConfig />
         : tab === Tab.Export ? <div>Export Placeholder</div>
         : <div>Unknown Tab</div>;
@@ -31,6 +34,7 @@ export default function SideBar({ mapRef }: { mapRef: RefObject<Map> }): ReactNo
                 break;
             default:
                 setTab(tab + 1);
+                setBoundaryEditing((tab + 1) === Tab.BoundaryAdjust);
                 break;
         }
     }
@@ -41,6 +45,7 @@ export default function SideBar({ mapRef }: { mapRef: RefObject<Map> }): ReactNo
                 break;
             default:
                 setTab(tab - 1);
+                setBoundaryEditing((tab - 1) === Tab.BoundaryAdjust);
                 break;
         }
     }

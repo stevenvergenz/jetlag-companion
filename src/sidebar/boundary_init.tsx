@@ -29,7 +29,11 @@ export default function BoundaryInit({ mapRef }: { mapRef: RefObject<Map> }): Re
     }
 
     return <div>
-        <p>Position the map on the area in which you want to play, then click "Setup".</p>
+        <h2>Boundary Setup</h2>
+        <p>
+            Position the map on the area in which you want to play, then click "Setup".
+            You will have a chance to fine-tune the boundary in the next step.
+        </p>
         <button onClick={initBoundary}>
             Setup
         </button>
