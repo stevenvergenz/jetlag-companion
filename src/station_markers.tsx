@@ -1,8 +1,9 @@
 import { ReactNode, useContext } from 'react';
 import { PathOptions } from 'leaflet';
-import { GeoJSON, LayerGroup, Tooltip } from 'react-leaflet';
+import { Circle, FeatureGroup, LayerGroup, Marker, Tooltip } from 'react-leaflet';
 import { SharedContext } from './context';
 import { Station, Id } from './data/index';
+import { convertLength } from '@turf/turf';
 
 const StationStyle: PathOptions = {
     color: '#3388ff',
@@ -41,9 +42,8 @@ export default function StationMarkers(): ReactNode {
     
 
     function renderStation(station: Station): ReactNode {
-        return <GeoJSON
+        return <FeatureGroup
             key={station.id}
-            data={station.toJSON()}
             pathOptions={hovering === station.id ? HoverStyle : StationStyle}
             eventHandlers={{
                 click: () => console.log(station),
@@ -51,11 +51,17 @@ export default function StationMarkers(): ReactNode {
                 mouseout: hoverEnd(station.id),
             }}
         >
-            <Tooltip>
-                <p className='font-bold'>{station.name}</p>
-                {station.modeString()}
-            </Tooltip>
-        </GeoJSON>;
+            <Marker position={[station.visual.lat, station.visual.lon]}>  
+                <Tooltip>
+                    <p className='font-bold'>{station.name}</p>
+                    {station.modeString()}
+                </Tooltip>
+            </Marker>
+            <Circle
+                center={[station.visual.lat, station.visual.lon]}
+                radius={convertLength(0.25, 'miles', 'meters')}
+                pathOptions={hovering === station.id ? HoverStyle : StationStyle} />
+        </FeatureGroup>;
     }
 
     const s = stations.flatMap(s => {

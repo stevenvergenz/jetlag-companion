@@ -1,4 +1,4 @@
-import { ReactNode, useContext, useState } from 'react';
+import { CSSProperties, ReactNode, useContext, useState } from 'react';
 
 import { Id, unpack, Way, Node, Station } from '../data';
 import { SharedContext } from '../context';
@@ -33,11 +33,13 @@ export function StationConfig(): ReactNode {
     
     function genLabel(station: Station) {
         const { type, id } = unpack(station.childRefs[0].id);
-        return <li>
-            <a target='_blank' href={`https://www.openstreetmap.org/${type}/${id}`}
-                onMouseEnter={hoverStart(station.childRefs[0].id)}
-                onMouseLeave={hoverEnd(station.childRefs[0].id)}
-            >
+        const hoverStyle: CSSProperties = { backgroundColor: '#827c5e45' };
+        return <li key={station.id}
+            onMouseEnter={hoverStart(station.id)}
+            onMouseLeave={hoverEnd(station.id)} 
+            style={hovering === station.id ? hoverStyle : undefined}
+        >
+            <a target='_blank' href={`https://www.openstreetmap.org/${type}/${id}`}>
                 {station.name}
             </a>
         </li>;
