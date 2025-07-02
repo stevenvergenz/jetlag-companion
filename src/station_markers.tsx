@@ -1,20 +1,31 @@
 import { ReactNode, useContext } from 'react';
 import { PathOptions } from 'leaflet';
-import { Circle, FeatureGroup, LayerGroup, Marker, Tooltip } from 'react-leaflet';
+import { Circle, LayerGroup, CircleMarker, Tooltip } from 'react-leaflet';
 import { SharedContext } from './context';
-import { Station, Id } from './data/index';
+import { Id } from './data/index';
 import { convertLength } from '@turf/turf';
+import { ZoneSize } from './config';
 
 const StationStyle: PathOptions = {
     color: '#3388ff',
     weight: 2,
-    fillOpacity: 0.5,
+    fillOpacity: 1,
+};
+
+const AreaStyle: PathOptions = {
+    ...StationStyle,
+    fillOpacity: 0.1,
+    weight: 0,
 };
 
 const HoverStyle: PathOptions = {
     ...StationStyle,
     color: '#ff0000',
 };
+const HoverAreaStyle: PathOptions = {
+    ...AreaStyle,
+    color: '#ff0000',
+}
 
 export default function StationMarkers(): ReactNode {
     const {
@@ -22,6 +33,7 @@ export default function StationMarkers(): ReactNode {
         hovering, setHovering,
         busRouteThreshold, trainRouteThreshold,
         stations,
+        zoneSize,
     } = useContext(SharedContext);
 
     function hoverStart(id: Id) {
@@ -39,45 +51,48 @@ export default function StationMarkers(): ReactNode {
             }
         };
     }
-    
 
-    function renderStation(station: Station): ReactNode {
-        return <FeatureGroup
-            key={station.id}
-            pathOptions={hovering === station.id ? HoverStyle : StationStyle}
+    const s = stations.filter(s => s.shouldShow({ busRouteThreshold, trainRouteThreshold }));
+    const radius = zoneSize === ZoneSize.SmallMi ? convertLength(0.25, 'miles', 'meters') :
+        zoneSize === ZoneSize.LargeMi ? convertLength(0.5, 'miles', 'meters') :
+        zoneSize === ZoneSize.SmallKm ? 500 :
+        1000;
+
+    const zones = s.map(s =>
+        <Circle
+            center={[s.visual.lat, s.visual.lon]}
+            radius={radius}
+            key={`${s.id}-zone`}
+            pathOptions={hovering === s.id ? HoverAreaStyle : AreaStyle}
+        />
+    );
+
+    const markers = s.map(s =>
+        <CircleMarker
+            center={[s.visual.lat, s.visual.lon]}
+            radius={3}
+            key={`${s.id}-marker`}
             eventHandlers={{
-                click: () => console.log(station),
-                mouseover: hoverStart(station.id),
-                mouseout: hoverEnd(station.id),
+                mouseover: hoverStart(s.id),
+                mouseout: hoverEnd(s.id),
             }}
+            pathOptions={hovering === s.id ? HoverStyle : StationStyle}
         >
-            <Marker position={[station.visual.lat, station.visual.lon]}>  
-                <Tooltip>
-                    <p className='font-bold'>{station.name}</p>
-                    {station.modeString()}
-                </Tooltip>
-            </Marker>
-            <Circle
-                center={[station.visual.lat, station.visual.lon]}
-                radius={convertLength(0.25, 'miles', 'meters')}
-                pathOptions={hovering === station.id ? HoverStyle : StationStyle} />
-        </FeatureGroup>;
-    }
-
-    const s = stations.flatMap(s => {
-        return hovering !== s.id && s.shouldShow({ busRouteThreshold, trainRouteThreshold })
-            ? [renderStation(s)] 
-            : [];
-    });
-
-    const hoveredStation = stations.find(s => s.id === hovering);
-    if (hoveredStation && hoveredStation.shouldShow({ busRouteThreshold, trainRouteThreshold })) {
-        s.push(renderStation(hoveredStation));
-    }
+            <Tooltip>
+                <span className='font-bold'>{s.name}</span>
+                {s.modeString()}
+            </Tooltip>
+        </CircleMarker>
+    );
         
     if (boundaryPoints && !boundaryEditing) {
-        return <LayerGroup attribution='<a target="_blank" href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'>
-            {s}
-        </LayerGroup>;
+        return <>
+            <LayerGroup attribution='<a target="_blank" href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'>
+                {zones}
+            </LayerGroup>
+            <LayerGroup attribution='<a target="_blank" href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'>
+                {markers}
+            </LayerGroup>
+        </>;
     }
 }

@@ -132,7 +132,7 @@ export default class Station extends Relation {
             modes.push(`${type} (${[...connections].join(', ')})`);
         }
 
-        return modes.map(m => <p key={`${this.id}-${m}`}>{m}</p>);
+        return modes.flatMap(m => [<br key={`${this.id}-${m}-`} />, <span key={`${this.id}-${m}`}>{m}</span>]);
     }
 
     /** @returns true if the platform is now part of the station */
