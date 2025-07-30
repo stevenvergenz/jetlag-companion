@@ -85,7 +85,7 @@ export default function ExportTab() {
         </div>
         <h2>Export</h2>
         <p>
-            When you are satisfied with the set of stations, blick the button below to export them to a KML file.
+            When you are satisfied with the set of stations, click the button below to export them to a KML file.
             You can then import this file into your map app of choice.
         </p>
         <button className='btn btn-primary' onClick={saveToKml}>
