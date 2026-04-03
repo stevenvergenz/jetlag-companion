@@ -17,7 +17,10 @@ export default function App(): ReactNode {
         zoom={4}
         ref={mapRef}
       >
-        <TileLayer url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'></TileLayer>
+        <TileLayer
+          url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+          referrerPolicy='strict-origin-when-cross-origin'>
+        </TileLayer>
         <Boundary />
         <StationMarkers />
       </MapContainer>
